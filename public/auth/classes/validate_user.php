@@ -152,6 +152,9 @@ class validate_user {
         if (!empty($user->suspended)) {
             throw new \core_auth\exception\user_suspended_exception($user);
         }
+        if (mutenancy_is_user_archived($user)) {
+            throw new \core_auth\exception\user_suspended_exception($user);
+        }
     }
 
     /**

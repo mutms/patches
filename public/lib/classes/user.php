@@ -654,7 +654,7 @@ class user {
             throw new moodle_exception('guestsarenotallowed', 'error');
         }
 
-        if ($checksuspended && $user->suspended) {
+        if ($checksuspended && ($user->suspended || mutenancy_is_user_archived($user))) {
             throw new moodle_exception('suspended', 'auth');
         }
 
@@ -856,6 +856,8 @@ class user {
         $fields['firstnamephonetic'] = ['type' => PARAM_NOTAGS, 'null' => NULL_ALLOWED];
         $fields['middlename'] = ['type' => PARAM_NOTAGS, 'null' => NULL_ALLOWED];
         $fields['alternatename'] = ['type' => PARAM_NOTAGS, 'null' => NULL_ALLOWED];
+
+        $fields['tenantid'] = ['type' => PARAM_INT, 'null' => NULL_ALLOWED];
 
         self::$propertiescache = $fields;
     }
@@ -1845,6 +1847,26 @@ class user {
             $user->country = static::get_property_default('country') ?: '';
         }
 
+        if (mutenancy_is_active()) {
+            if (!empty($user->tenantid)) {
+                $tenant = $DB->get_record('tool_mutenancy_tenant', ['id' => $user->tenantid]);
+                if (!$tenant) {
+                    throw new \core\exception\invalid_parameter_exception('Invalid tenantid specified');
+                }
+            } else if (!empty($user->tenant)) {
+                $tenant = $DB->get_record('tool_mutenancy_tenant', ['idnumber' => $user->tenant]);
+                if (!$tenant) {
+                    throw new \core\exception\invalid_parameter_exception('Invalid tenant idnumber specified');
+                }
+                $user->tenantid = $tenant->id;
+            } else {
+                $user->tenantid = null;
+            }
+        } else {
+            $user->tenantid = null;
+        }
+        unset($user->tenant);
+
         $user->timecreated = time();
         $user->timemodified = $user->timecreated;
 
@@ -1932,6 +1954,10 @@ class user {
         $changedattributes = [];
         foreach ($user as $attributekey => $attributevalue) {
             if (!property_exists($currentrecord, $attributekey) || $attributekey === 'timemodified') {
+                continue;
+            }
+            if ($attributekey === 'tenantid') {
+                // Tenant allocation changes are handled elsewhere!
                 continue;
             }
             if ($currentrecord->{$attributekey} !== $attributevalue) {
