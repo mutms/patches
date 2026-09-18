@@ -3483,6 +3483,12 @@ class core_course_external extends external_api {
                 $coursesdata[$course->id]['lang'] = clean_param($coursesdata[$course->id]['lang'], PARAM_LANG);
             }
 
+            if (mutenancy_is_active()) {
+                if (property_exists($user, 'tenantid')) {
+                    $userdetails['tenantid'] = $user->tenantid;
+                }
+            }
+
             $courseformatoptions = course_get_format($course)->get_config_for_external();
             foreach ($courseformatoptions as $key => $value) {
                 $coursesdata[$course->id]['courseformatoptions'][] = array(

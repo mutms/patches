@@ -391,6 +391,11 @@ class renderer_base {
      */
     public function get_logo_url($maxwidth = null, $maxheight = 200) {
         global $CFG;
+
+        if (mutenancy_is_active()) {
+            return \tool_mutenancy\local\appearance::get_logo_url($maxwidth, $maxheight);
+        }
+
         $logo = get_config('core_admin', 'logo');
         if (empty($logo)) {
             return false;
@@ -422,6 +427,11 @@ class renderer_base {
      */
     public function get_compact_logo_url($maxwidth = 300, $maxheight = 300) {
         global $CFG;
+
+        if (mutenancy_is_active()) {
+            return \tool_mutenancy\local\appearance::get_compact_logo_url($maxwidth, $maxheight);
+        }
+
         $logo = get_config('core_admin', 'logocompact');
         if (empty($logo)) {
             return false;

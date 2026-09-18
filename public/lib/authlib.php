@@ -1104,7 +1104,13 @@ function login_unlock_account($user, bool $notify = false) {
  */
 function signup_captcha_enabled() {
     global $CFG;
-    $authplugin = \core\di::get(\core\authentication::class)->get_plugin($CFG->registerauth);
+
+    $registerauth = mutenancy_get_config('core', 'registerauth');
+    if (!is_enabled_auth($registerauth)) {
+        return false;
+    }
+
+    $authplugin = \core\di::get(\core\authentication::class)->get_plugin($registerauth);
     return !empty($CFG->recaptchapublickey) && !empty($CFG->recaptchaprivatekey) && $authplugin->is_captcha_enabled();
 }
 
@@ -1164,7 +1170,10 @@ function signup_validate_data($data, $files) {
     global $CFG, $DB;
 
     $errors = array();
-    $authplugin = \core\di::get(\core\authentication::class)->get_plugin($CFG->registerauth);
+
+    $registerauth = mutenancy_get_config('core', 'registerauth');
+
+    $authplugin = \core\di::get(\core\authentication::class)->get_plugin($registerauth);
 
     if ($DB->record_exists('user', array('username' => $data['username'], 'mnethostid' => $CFG->mnet_localhost_id))) {
         $errors['username'] = get_string('usernameexists');
@@ -1268,6 +1277,12 @@ function signup_setup_new_user($user) {
     $user->mnethostid  = $CFG->mnet_localhost_id;
     $user->secret      = random_string(15);
     $user->auth        = $CFG->registerauth;
+
+    if (mutenancy_is_active()) {
+        $user->auth = mutenancy_get_config('core', 'registerauth');
+        $user->tenantid = \tool_mutenancy\local\tenancy::get_current_tenantid();
+    }
+
     // Initialize alternate name fields to empty strings.
     $namefields = array_diff(\core_user\fields::get_name_fields(), useredit_get_required_name_fields());
     foreach ($namefields as $namefield) {
@@ -1285,10 +1300,11 @@ function signup_setup_new_user($user) {
 function signup_get_user_confirmation_authplugin() {
     global $CFG;
 
-    if (empty($CFG->registerauth)) {
+    $registerauth = mutenancy_get_config('core', 'registerauth');
+    if (!is_enabled_auth($registerauth)) {
         return false;
     }
-    $authplugin = \core\di::get(\core\authentication::class)->get_plugin($CFG->registerauth);
+    $authplugin = \core\di::get(\core\authentication::class)->get_plugin($registerauth);
 
     if (!$authplugin->can_confirm()) {
         return false;
@@ -1305,8 +1321,13 @@ function signup_get_user_confirmation_authplugin() {
 function signup_is_enabled() {
     global $CFG;
 
-    if (!empty($CFG->registerauth)) {
-        $authplugin = \core\di::get(\core\authentication::class)->get_plugin($CFG->registerauth);
+    $registerauth = mutenancy_get_config('core', 'registerauth');
+    if (!$registerauth || !is_enabled_auth($registerauth)) {
+        return false;
+    }
+
+    if (!empty($registerauth)) {
+        $authplugin = \core\di::get(\core\authentication::class)->get_plugin($registerauth);
         if ($authplugin->can_signup()) {
             return $authplugin;
         }

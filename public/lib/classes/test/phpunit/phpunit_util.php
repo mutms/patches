@@ -498,6 +498,10 @@ class phpunit_util extends \core\test\testing_util {
         set_config('curlsecurityblockedhosts', '');
         set_config('curlsecurityallowedport', '');
 
+        if (defined('TEST_MUTENANCY_INIT_ACTIVATE') && TEST_MUTENANCY_INIT_ACTIVATE) {
+            \tool_mutenancy\local\tenancy::activate();
+        }
+
         // Configure keys to ensure that tests of the oauth2 framework do not cause DB changes.
         \core\di::get(\core\oauth2\setup::class)->configure_keys();
 

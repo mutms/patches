@@ -86,11 +86,12 @@ class confirm_scopes_page extends oauth2_page {
         }
 
         // Auth instructions, shown in the branding panel when the admin has configured them.
-        $data->hasauthinstructions = !empty($CFG->auth_instructions);
+        $instructions = mutenancy_get_config('core', 'auth_instructions');
+        $data->hasauthinstructions = !empty($instructions);
         $data->authinstructions = null;
-        if (!empty($CFG->auth_instructions)) {
+        if (!empty($instructions)) {
             $data->authinstructions = format_text(
-                $CFG->auth_instructions,
+                $instructions,
                 FORMAT_MOODLE,
                 ['context' => \core\context\system::instance()],
             );
