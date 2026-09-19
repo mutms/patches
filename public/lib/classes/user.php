@@ -2350,8 +2350,10 @@ class user {
             $userdetails['theme'] = clean_param($userdetails['theme'], PARAM_THEME);
         }
 
-        if (mutenancy_is_active()) {
-            $userdetails['tenantid'] = $user->tenantid;
+        if (in_array('tenantid', $userfields)) {
+            if (mutenancy_is_active()) {
+                $userdetails['tenantid'] = $user->tenantid;
+            }
         }
 
         return $userdetails;
