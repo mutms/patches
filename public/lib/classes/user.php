@@ -2010,6 +2010,7 @@ class user {
             'idnumber', 'lang', 'theme', 'timezone', 'mailformat', 'description', 'descriptionformat',
             'city', 'country', 'profileimageurlsmall', 'profileimageurl', 'customfields',
             'groups', 'roles', 'preferences', 'enrolledcourses', 'suspended', 'lastcourseaccess', 'trackforums',
+            'tenantid',
         ];
     }
 
@@ -2347,6 +2348,10 @@ class user {
         }
         if (isset($userdetails['theme'])) {
             $userdetails['theme'] = clean_param($userdetails['theme'], PARAM_THEME);
+        }
+
+        if (mutenancy_is_active()) {
+            $userdetails['tenantid'] = $user->tenantid;
         }
 
         return $userdetails;
