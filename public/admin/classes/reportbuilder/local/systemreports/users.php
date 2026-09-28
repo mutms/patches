@@ -424,7 +424,7 @@ class users extends system_report {
         if (mutenancy_is_active()) {
             if ($DB->record_exists('tool_mutenancy_tenant', [])) {
                 $url = new moodle_url('/admin/tool/mutenancy/management/user_allocate.php', ['id' => ':id']);
-                $link = new \tool_mulib\output\ajax_form\link($url, new lang_string('user_allocate', 'tool_mutenancy'), 'i/switch');
+                $link = new \tool_mulib\output\muform\dialog\link($url, new lang_string('user_allocate', 'tool_mutenancy'), 'i/switch');
                 $this->add_action($link->create_report_action()
                     ->add_callback(static function(\stdclass $row) use ($contextsystem): bool {
                         global $USER;
