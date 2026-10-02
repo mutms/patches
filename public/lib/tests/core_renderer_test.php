@@ -16,6 +16,7 @@
 
 namespace core;
 
+use core_courseformat\local\linearnavigationsettings;
 use core_renderer;
 use moodle_page;
 
@@ -446,5 +447,143 @@ EOF
         $attributes = $renderer->htmlattributes();
         $this->assertIsString($attributes);
         $this->assertStringContainsString('data-test="test"', $attributes);
+    }
+
+    /**
+     * Get a renderer for an activity page, in a course with linear navigation enabled, that has started printing its body.
+     *
+     * @return core_renderer
+     */
+    private function get_activity_page_renderer_with_linear_navigation(): core_renderer {
+        global $PAGE;
+
+        set_config(linearnavigationsettings::SETTING_ENABLE_LINEAR_NAV, 1, 'format_topics');
+        $course = $this->getDataGenerator()->create_course(['format' => 'topics']);
+        $module = $this->getDataGenerator()->create_module('page', ['course' => $course->id]);
+        $this->getDataGenerator()->create_module('page', ['course' => $course->id]);
+
+        $PAGE->set_cm(get_coursemodule_from_id('page', $module->cmid), $course);
+        $PAGE->set_url('/mod/page/view.php', ['id' => $module->cmid]);
+        $PAGE->set_state(moodle_page::STATE_PRINTING_HEADER);
+        $PAGE->set_state(moodle_page::STATE_IN_BODY);
+        $PAGE->opencontainers->push('header/footer', '</body></html>');
+
+        return new core_renderer($PAGE, RENDERER_TARGET_GENERAL);
+    }
+
+    /**
+     * Test the linear navigation footer is shown on an activity page.
+     */
+    public function test_footer_shows_linear_navigation_footer(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $renderer = $this->get_activity_page_renderer_with_linear_navigation();
+
+        $html = $renderer->footer();
+        $this->assertStringContainsString('course-linear-navigation', $html);
+    }
+
+    /**
+     * Test the linear navigation footer is not shown on an error page raised from an activity page.
+     */
+    public function test_fatal_error_hides_linear_navigation_footer(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $renderer = $this->get_activity_page_renderer_with_linear_navigation();
+
+        $html = $renderer->fatal_error('Error message', '', '', []);
+        $this->assertStringContainsString('Error message', $html);
+        $this->assertStringNotContainsString('course-linear-navigation', $html);
+        $this->assertFalse($renderer->get_page()->should_show_navigation_footer());
+    }
+
+    /**
+     * The Edit mode switch renders the design system Switch component with matching props.
+     */
+    public function test_edit_switch_renders_design_system_switch(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $page = new moodle_page();
+        $page->set_url('/course/view.php', ['id' => 2]);
+        $page->set_context(\context_system::instance());
+        $renderer = new core_renderer($page, RENDERER_TARGET_GENERAL);
+
+        $html = $renderer->edit_switch();
+
+        $this->assertNotNull($html);
+        $this->assertStringContainsString('data-react-component="@moodle/lms/core/EditModeSwitch"', $html);
+        $this->assertStringContainsString('editmode-switch-form', $html);
+        $this->assertStringContainsString(get_string('editmode'), $html);
+        $this->assertStringContainsString(get_string('setmode', 'core'), $html);
+        $this->assertStringContainsString('name="sesskey"', $html);
+        $this->assertStringContainsString('name="pageurl"', $html);
+        $this->assertStringContainsString('name="context"', $html);
+
+        // Extract and decode the JSON props handed to the React component.
+        $this->assertMatchesRegularExpression('/data-react-props=\'([^\']+)\'/', $html);
+        preg_match('/data-react-props=\'([^\']+)\'/', $html, $matches);
+        $props = json_decode($matches[1], true);
+        $this->assertIsArray($props);
+        $this->assertSame($page->context->id, $props['context']);
+        $this->assertSame($page->url->out(false), $props['pageurl']);
+        $this->assertArrayNotHasKey('sesskey', $props);
+        $this->assertFalse($props['checked']);
+        $this->assertSame(get_string('editmode'), $props['label']);
+
+        // The same id must be shared between the props and the fallback checkbox/label, so
+        // core/edit_switch.js and Behat's label-based field lookup keep working either way.
+        $this->assertStringContainsString('id="' . $props['id'] . '"', $html);
+        $this->assertStringContainsString('for="' . $props['id'] . '"', $html);
+
+        // The accessibility fix itself: the fallback must use the design system's "enable" variant
+        // and its thumb icon (both states rendered, toggled via CSS), not a bare unlabelled circle.
+        $this->assertStringContainsString('mds-switch--variant-enable', $html);
+        $this->assertStringContainsString('mds-switch-icon-item mds-switch-icon-item--unchecked', $html);
+        $this->assertStringContainsString('mds-switch-icon-item mds-switch-icon-item--checked', $html);
+    }
+
+    /**
+     * The switch's checked state and props reflect that the current user has editing on.
+     */
+    public function test_edit_switch_reflects_editing_on(): void {
+        global $USER;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $USER->editing = 1;
+
+        $page = new moodle_page();
+        $page->set_url('/course/view.php', ['id' => 2]);
+        $page->set_context(\context_system::instance());
+        $renderer = new core_renderer($page, RENDERER_TARGET_GENERAL);
+
+        $html = $renderer->edit_switch();
+
+        $this->assertMatchesRegularExpression('/data-react-props=\'([^\']+)\'/', $html);
+        preg_match('/data-react-props=\'([^\']+)\'/', $html, $matches);
+        $props = json_decode($matches[1], true);
+        $this->assertTrue($props['checked']);
+
+        // The fallback markup always emits both icon spans (toggled via CSS opacity, not
+        // conditional markup), so assert the checkbox's checked attribute specifically rather
+        // than the literal substring 'checked', which is present regardless of switch state.
+        $this->assertMatchesRegularExpression('/<input[^>]*\bchecked\b[^>]*class="mds-switch-input"/', $html);
+    }
+
+    /**
+     * The switch is not rendered at all for a user without editing capability.
+     */
+    public function test_edit_switch_returns_null_when_user_cannot_edit(): void {
+        $this->resetAfterTest();
+        $this->setGuestUser();
+
+        $page = new moodle_page();
+        $page->set_url('/course/view.php', ['id' => 2]);
+        $page->set_context(\context_system::instance());
+        $renderer = new core_renderer($page, RENDERER_TARGET_GENERAL);
+
+        $this->assertNull($renderer->edit_switch());
     }
 }

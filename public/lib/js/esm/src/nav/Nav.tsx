@@ -84,6 +84,32 @@ const isNodeActive = (node: NavNode): boolean =>
     node.active || node.children.some(isNodeActive);
 
 /**
+ * Returns a copy of the given nodes with `active` recomputed against a specific href, recursively.
+ *
+ * The server computes `active` once, from the page's URL, which can't reflect a tab Bootstrap
+ * later activates client-side. Without this, the pane Bootstrap controls and the pill React highlights can disagree.
+ *
+ * @param nodes The nodes to recompute.
+ * @param activeHref The href of the tab Bootstrap reports as active.
+ * @returns A new node array with `active` set to `node.href === activeHref` throughout.
+ */
+const withActiveHref = (nodes: NavNode[], activeHref: string): NavNode[] => nodes.map((node) => ({
+    ...node,
+    active: node.href === activeHref,
+    children: withActiveHref(node.children, activeHref),
+}));
+
+/**
+ * Checks whether any node, or one of its descendants, has the given href.
+ *
+ * @param nodes The nodes to search.
+ * @param href The href to look for.
+ * @returns True if some node in the tree has that href.
+ */
+const hasNodeWithHref = (nodes: NavNode[], href: string): boolean =>
+    nodes.some((node) => node.href === href || hasNodeWithHref(node.children, href));
+
+/**
  * Attribute names excluded from toAttributeRecord()'s output because they're already handled
  * explicitly by DropdownItems (id, via item.id).
  */
@@ -217,7 +243,7 @@ function DropdownSubmenu({node, istablist = false}: {node: NavNode; istablist?: 
             >
                 {node.text}
             </a>
-            <div className="dropdown-menu" id={menuId} role="menu" aria-labelledby={toggleId}>
+            <div className="dropdown-menu" id={menuId} role={istablist ? 'none' : 'menu'} aria-labelledby={toggleId}>
                 <DropdownItems items={node.children} istablist={istablist} />
             </div>
         </div>
@@ -257,6 +283,11 @@ function DropdownItems(
                     return <DropdownSubmenu key={item.key} node={item} istablist={istablist} />;
                 }
 
+                let ariaSelected: 'true' | 'false' | undefined;
+                if (istablist) {
+                    ariaSelected = item.active ? 'true' : 'false';
+                }
+
                 return (
                     <a
                         key={item.key}
@@ -264,8 +295,12 @@ function DropdownItems(
                         className={`dropdown-item${item.active ? ' active' : ''}`}
                         href={item.href ?? '#'}
                         title={item.title ?? undefined}
-                        aria-current={item.active ? 'page' : undefined}
-                        role="menuitem"
+                        aria-current={!istablist && item.active ? 'page' : undefined}
+                        aria-selected={ariaSelected}
+                        // Bootstrap's Tab component only fires "shown.bs.tab" (and sets aria-selected) for elements whose role
+                        // is exactly "tab". An overflowed tablist item still needs data-bs-toggle="tab" to switch panes, so it
+                        // must also carry role="tab".
+                        role={istablist ? 'tab' : 'menuitem'}
                         data-bs-toggle={istablist ? 'tab' : undefined}
                         data-text={istablist ? item.text : undefined}
                         // React owns this item's active state via item.active above regardless of
@@ -330,7 +365,10 @@ function PillDropdownToggle(
     const menu = isValidElement(children)
         ? cloneElement(children as ReactElement<{id?: string; role?: string; 'aria-labelledby'?: string}>, {
             id: menuId,
-            role: 'menu',
+            // A role="menu" may only own menuitems, but an istablist dropdown holds role="tab"
+            // items (see DropdownItems). role="none" keeps the container out of the accessibility
+            // tree so those tabs stay owned by the enclosing role="tablist".
+            role: istablist ? 'none' : 'menu',
             'aria-labelledby': toggleId,
         })
         : children;
@@ -491,13 +529,48 @@ const MEASURED_CLASS = 'secondarynav-measured';
 export default function Nav(
     {items, morelabel, istablist, navbarstyle, measuredclass = MEASURED_CLASS, navlabel}: NavProps,
 ) {
+    const menuRef = useRef<HTMLUListElement>(null);
+
+    // Bootstrap's Tab component (data-bs-toggle="tab") can activate a tab client-side. React never hears about
+    // that on its own. Track the href Bootstrap actually activates and use it to override the server's `active` flags.
+    // Seeded from location.hash on mount (rather than left null until the first shown.bs.tab event) because the
+    // browser never sends the hash to the server.
+    const [activeOverrideHref, setActiveOverrideHref] = useState<string | null>(() => {
+        if (!istablist) {
+            return null;
+        }
+        const hash = window.location.hash;
+        return hash && hasNodeWithHref(items, hash) ? hash : null;
+    });
+
+    useEffect(() => {
+        if (!istablist) {
+            return undefined;
+        }
+
+        const handleShown = (event: Event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLElement) || !menuRef.current?.contains(target)) {
+                return;
+            }
+            const href = target.getAttribute('href');
+            if (href && href !== '#') {
+                setActiveOverrideHref(href);
+            }
+        };
+
+        document.addEventListener('shown.bs.tab', handleShown);
+        return () => document.removeEventListener('shown.bs.tab', handleShown);
+    }, [istablist]);
+
+    const effectiveItems = istablist && activeOverrideHref ? withActiveHref(items, activeOverrideHref) : items;
+
     // Dividers are a dropdown-only concept (see DropdownItems); the server side export already
     // drops them at the top level, but guard here too so one could never render as a bare pill.
-    const toplevel = items.filter((item) => !item.divider);
+    const toplevel = effectiveItems.filter((item) => !item.divider);
     const forced = toplevel.filter((item) => item.forceintomoremenu);
     const rest = toplevel.filter((item) => !item.forceintomoremenu);
 
-    const menuRef = useRef<HTMLUListElement>(null);
     // The landmark, when one is rendered. The measurement below sizes the menu against the React
     // mount point, so it must resolve the container from whichever element is outermost here
     // rather than from the <ul>, whose parent is the landmark once there is one.
@@ -664,6 +737,65 @@ export default function Nav(
     // that Behat helpers like behat_navigation::select_on_administration_page() (which look up
     // //ul[@role='menubar']/li/a[...] for non-tablist navs) keep working under JS.
     const itemRole = 'none';
+
+    // Keyboard movement along an istablist bar, with manual activation: the arrow keys and Home/End only move
+    // focus, and Enter or Space activates the focused tab. Bootstrap's own Tab keydown handler can't be left to
+    // do this: it activates on every arrow press, skips the "More" toggle (a .dropdown-toggle) but counts the
+    // overflowed tabs inside the closed menu, so an arrow press can activate a hidden tab. It can't take focus,
+    // which is dropped to the page start. Move between the visible tabs and the toggle instead.
+    // Keys pressed inside the dropdown menu itself are left to Bootstrap.
+    //
+    // Bootstrap registers its delegated handlers in the capture phase on `document`, so neither a React
+    // onKeyDown nor a listener on the menu ever sees the event first. Listen on `window`, which sits before
+    // `document` in the capture path, and stop the event there.
+    useEffect(() => {
+        if (!istablist) {
+            return undefined;
+        }
+
+        const keys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', ' '];
+        const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+            const target = event.target;
+            if (!keys.includes(event.key) || !(target instanceof HTMLElement) || target.closest('.dropdown-menu')) {
+                return;
+            }
+
+            // Up/Down/Space on a dropdown toggle open its menu (theme_boost/aria.js and Bootstrap's Dropdown).
+            if (target.matches('[data-bs-toggle="dropdown"]') && !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+                return;
+            }
+
+            const stops = Array.from(menuRef.current?.querySelectorAll<HTMLElement>(':scope > li > a[role="tab"]') ?? [])
+                .filter((stop) => !stop.closest('.d-none'));
+            const index = stops.indexOf(target);
+            if (index === -1) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (event.key === ' ') {
+                // Enter already clicks an <a>, Space does not.
+                target.click();
+                return;
+            }
+
+            let next: HTMLElement;
+            if (event.key === 'Home') {
+                next = stops[0];
+            } else if (event.key === 'End') {
+                next = stops[stops.length - 1];
+            } else {
+                const step = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : -1;
+                next = stops[(index + step + stops.length) % stops.length];
+            }
+            next.focus();
+        };
+
+        window.addEventListener('keydown', handleKeyDown, true);
+        return () => window.removeEventListener('keydown', handleKeyDown, true);
+    }, [istablist]);
 
     const menu = (
         <ul
