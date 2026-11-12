@@ -12,5 +12,5 @@ return [
     'description' => 'Patches required by tool_mutenancy plugin which implements multi-tenancy support in Moodle™',
     'url' => 'https://github.com/mutms/moodle/tree/patch/mutenancy/MOODLE_503_DEV',
     'maintainer' => 'Petr Skoda',
-    'release' => 'mutenancy-5.3.0-00',
+    'release' => 'mutenancy-5.3.1-00',
 ];
