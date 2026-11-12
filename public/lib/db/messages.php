@@ -43,6 +43,34 @@ $messageproviders = array (
         ],
     ),
 
+    // Warnings that one of the user's personal access tokens is about to expire, or has.
+    'personalaccesstokenexpiry' => [
+        'defaults' => [
+            'popup' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+            'email' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+        ],
+        'capability' => 'moodle/api:createtoken',
+    ],
+
+    // A personal access token was created on the user's account. The email is sent directly by
+    // \core\credential_notice, so this provider only adds the notification and never emails.
+    'personalaccesstokencreated' => [
+        'defaults' => [
+            'popup' => MESSAGE_FORCED + MESSAGE_DEFAULT_ENABLED,
+            'email' => MESSAGE_DISALLOWED,
+        ],
+        'capability' => 'moodle/api:createtoken',
+    ],
+
+    // A secret was created for an OAuth 2 client. Notification only, for the same reason.
+    'oauth2clientsecretcreated' => [
+        'defaults' => [
+            'popup' => MESSAGE_FORCED + MESSAGE_DEFAULT_ENABLED,
+            'email' => MESSAGE_DISALLOWED,
+        ],
+        'capability' => 'moodle/site:manageoauth2clients',
+    ],
+
     // Notices that an admin might be interested in.
     'notices' => array (
         'defaults' => [
@@ -242,5 +270,23 @@ $messageproviders = array (
             'email' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
             'airnotifier' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
         ],
+    ],
+
+    // OAuth2 secret expiry warning notification to administrators.
+    'oauth2_secret_expiry_warning' => [
+        'defaults' => [
+            'popup' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+            'email' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+        ],
+        'capability' => 'moodle/site:manageoauth2clients',
+    ],
+
+    // OAuth 2 client secret expired warning.
+    'oauth2_secret_expired' => [
+        'defaults'   => [
+            'popup' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+            'email' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+        ],
+        'capability' => 'moodle/site:manageoauth2clients',
     ],
 );

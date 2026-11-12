@@ -70,10 +70,10 @@ final class api_test extends \advanced_testcase {
     /**
      * Tests for the has_additional_results API function.
      *
-     * @dataProvider has_additional_results_provider
      * @param   object      $result     The data to test
      * @param   bool        $expected   The expected result
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('has_additional_results_provider')]
     public function test_has_additional_results($result, $expected): void {
         $mock = $this->getMockBuilder(\repository_dropbox\dropbox::class)
             ->disableOriginalConstructor()
@@ -144,12 +144,12 @@ final class api_test extends \advanced_testcase {
     /**
      * Tests for check_and_handle_api_errors.
      *
-     * @dataProvider check_and_handle_api_errors_provider
      * @param   object      $info       The response to test
      * @param   string      $data       The contented returned by the curl call
      * @param   string      $exception  The name of the expected exception
      * @param   string      $exceptionmessage  The expected message in the exception
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('check_and_handle_api_errors_provider')]
     public function test_check_and_handle_api_errors($info, $data, $exception, $exceptionmessage): void {
         $mock = $this->getMockBuilder(\repository_dropbox\dropbox::class)
             ->disableOriginalConstructor()
@@ -240,10 +240,10 @@ final class api_test extends \advanced_testcase {
     /**
      * Test the supports_thumbnail function.
      *
-     * @dataProvider supports_thumbnail_provider
      * @param   object      $entry      The entry to test
      * @param   bool        $expected   Whether this entry supports thumbnail generation
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('supports_thumbnail_provider')]
     public function test_supports_thumbnail($entry, $expected): void {
         $mock = $this->getMockBuilder(\repository_dropbox\dropbox::class)
             ->disableOriginalConstructor()
@@ -321,14 +321,14 @@ final class api_test extends \advanced_testcase {
         $mock->expects($this->once())
             ->method('get_api_endpoint')
             ->with($endpoint)
-            ->will($this->returnValue("https://example.com/api/2/{$endpoint}"));
+            ->willReturn("https://example.com/api/2/{$endpoint}");
 
         $mock->expects($this->never())
             ->method('get_content_endpoint');
 
         $mock->expects($this->once())
             ->method('request')
-            ->will($this->returnValue(json_encode([])));
+            ->willReturn(json_encode([]));
 
         // Make the call.
         $rc = new \ReflectionClass(\repository_dropbox\dropbox::class);
@@ -354,7 +354,7 @@ final class api_test extends \advanced_testcase {
             ->with($this->anything(), $this->callback(function($d) {
                     return $d['CURLOPT_POSTFIELDS'] === 'null';
                 }))
-            ->will($this->returnValue(json_encode([])));
+            ->willReturn(json_encode([]));
 
         // Make the call.
         $rc = new \ReflectionClass(\repository_dropbox\dropbox::class);
@@ -381,7 +381,7 @@ final class api_test extends \advanced_testcase {
             ->with($this->anything(), $this->callback(function($d) use ($data) {
                     return $d['CURLOPT_POSTFIELDS'] === json_encode($data);
                 }))
-            ->will($this->returnValue(json_encode([])));
+            ->willReturn(json_encode([]));
 
         // Make the call.
         $rc = new \ReflectionClass(\repository_dropbox\dropbox::class);
@@ -475,7 +475,7 @@ final class api_test extends \advanced_testcase {
         $mock->expects($this->once())
             ->method('get_content_endpoint')
             ->with($endpoint)
-            ->will($this->returnValue($url));
+            ->willReturn($url);
 
         $mock->expects($this->never())
             ->method('get_api_endpoint');
@@ -545,7 +545,7 @@ final class api_test extends \advanced_testcase {
         $mock->expects($this->once())
             ->method('normalize_file_share_info')
             ->with($this->equalTo($file))
-            ->will($this->returnValue($sharelink));
+            ->willReturn($sharelink);
 
         $this->assertEquals($sharelink, $mock->get_file_share_info($id));
     }
@@ -588,7 +588,7 @@ final class api_test extends \advanced_testcase {
         $mock->expects($this->once())
             ->method('normalize_file_share_info')
             ->with($this->equalTo($file))
-            ->will($this->returnValue($sharelink));
+            ->willReturn($sharelink);
 
         $this->assertEquals($sharelink, $mock->get_file_share_info($id));
     }

@@ -58,12 +58,50 @@ Feature: Manage personal access tokens
     And I should not see "This secret is shown only once"
     And I should not see "Your new token"
 
+  @javascript
+  Scenario: Creating a token notifies its owner
+    Given I am on the "user > Personal access tokens" page logged in as "user1"
+    And I click on "Create token" "link"
+    And I set the following fields to these values:
+      | Name                         | Attendance export |
+      | scope_core_grades_grade_read | 1                 |
+    And I press "Create token"
+    When I open the notification popover
+    Then I should see "New personal access token \"Attendance export\" created on your account" in the ".popover-region-notifications" "css_element"
+
   Scenario: A token cannot be created without a scope
     Given I am on the "user > Personal access tokens" page logged in as "user1"
     And I click on "Create token" "link"
     And I set the field "Name" to "No scopes"
     When I press "Create token"
     Then I should see "Select at least one scope for the token."
+    # The scopes checkboxes sit in a fieldset so the error names the group as a unit, rather
+    # than any single checkbox, to a screen reader.
+    And "#id_scopesfieldset" "css_element" should exist
+    And "legend" "css_element" should exist in the "#id_scopesfieldset" "css_element"
+    And the "aria-invalid" attribute of "#id_scopesfieldset" "css_element" should contain "true"
+    # The error is in the legend, the fieldset's accessible name: as an aria-describedby
+    # description it is not announced by JAWS on groups at all, and not reliably by VoiceOver
+    # when focus is scripted into the group, while the name is announced on focus whatever the
+    # screen reader.
+    And I should see "Select at least one scope for the token." in the "#id_scopesfieldset legend" "css_element"
+    # A deliberate, persistent error box, not just the browser's own (and inconsistently
+    # coloured) focus-ring outline, so it survives focus moving elsewhere.
+    And the "class" attribute of "#id_scopesfieldset" "css_element" should contain "border-danger"
+
+  Scenario: The scopes fieldset carries no error styling before it has been submitted
+    Given I am on the "user > Personal access tokens" page logged in as "user1"
+    When I click on "Create token" "link"
+    Then "#id_scopesfieldset" "css_element" should exist
+    And "#id_scopesfieldset.border-danger" "css_element" should not exist
+
+  @javascript
+  Scenario: The scopes error moves focus to the scopes fieldset
+    Given I am on the "user > Personal access tokens" page logged in as "user1"
+    And I click on "Create token" "link"
+    And I set the field "Name" to "No scopes"
+    When I press "Create token"
+    Then the focused element is "#id_scopesfieldset" "css_element"
 
   Scenario: A user only ever sees their own tokens
     Given I am on the "user > Personal access tokens" page logged in as "user1"
@@ -166,3 +204,12 @@ Feature: Manage personal access tokens
     When I click on "Revoke" "button" in the "Gradebook sync" "table_row"
     Then I should see "Token revoked"
     And I should see "You have no personal access tokens."
+
+  @javascript
+  Scenario: The expiring soon warning opens when its icon is clicked
+    Given the following "personal access tokens" exist:
+      | user  | name           | expirytime  |
+      | user1 | Gradebook sync | ##+2 days## |
+    And I am on the "user > Personal access tokens" page logged in as "user1"
+    When I click on "Expires within 3 days" "button" in the "Gradebook sync" "table_row"
+    Then I should see "Expires within 3 days" in the ".popover" "css_element"

@@ -1996,8 +1996,24 @@ class assign {
      * @return grade_item The grade_item record
      */
     public function get_grade_item() {
+        if (!$this->has_grade_item()) {
+            throw new coding_exception('Improper use of the assignment class. ' .
+                                       'Cannot load the grade item.');
+        }
+        return $this->gradeitem;
+    }
+
+    /**
+     * Does the primary grade item exist for this assign instance?
+     *
+     * It does not exist when the assignment has no grade and no feedback plugin writing to the
+     * gradebook, because grade_update() does not create a grade item of type GRADE_TYPE_NONE.
+     *
+     * @return bool true if the grade item exists
+     */
+    protected function has_grade_item(): bool {
         if ($this->gradeitem) {
-            return $this->gradeitem;
+            return true;
         }
         $instance = $this->get_instance();
         $params = array('itemtype' => 'mod',
@@ -2006,11 +2022,7 @@ class assign {
                         'courseid' => $instance->course,
                         'itemnumber' => 0);
         $this->gradeitem = grade_item::fetch($params);
-        if (!$this->gradeitem) {
-            throw new coding_exception('Improper use of the assignment class. ' .
-                                       'Cannot load the grade item.');
-        }
-        return $this->gradeitem;
+        return !empty($this->gradeitem);
     }
 
     /**
@@ -6283,7 +6295,10 @@ class assign {
             $gradingitem = $gradinginfo->items[0];
         }
 
-        $usergrade = $this->get_grade_item()->get_grade($userid, false);
+        // The grade item does not exist when the assignment has no grade and no feedback plugin
+        // writing to the gradebook, in which case there is nothing to read from the gradebook.
+        $gradeitem = $this->has_grade_item() ? $this->get_grade_item() : null;
+        $usergrade = $gradeitem ? $gradeitem->get_grade($userid, false) : null;
 
         foreach ($grades as $grade) {
             // First lookup the grader info.
@@ -6310,10 +6325,11 @@ class assign {
                 $penaltyindicator = \core_grades\penalty_manager::show_penalty_indicator(
                     new \grade_grade([
                         'deductedmark' => $deductedmark,
-                        'overridden' => $userid > 0 ? $this->get_grade_item()->get_grade($userid)->overridden : 0,
+                        'overridden' => $userid > 0 && $gradeitem ? $gradeitem->get_grade($userid)->overridden : 0,
                     ], false)
                 );
-                $gradeoutput = $penaltyindicator . format_float($penalisedgrade, $this->get_grade_item()->get_decimals());
+                $decimals = $gradeitem ? $gradeitem->get_decimals() : 0;
+                $gradeoutput = $penaltyindicator . format_float($penalisedgrade, $decimals);
 
                 $grade->gradefordisplay = $controller->render_grade($PAGE, $grade->id, $gradingitem, $gradeoutput, $cangrade);
             } else {
@@ -6345,6 +6361,11 @@ class assign {
         if ($grade->penalty > 0) {
             $deductedmark = $grade->grade * $grade->penalty / 100;
             $penalisedgrade = $grade->grade - $deductedmark;
+        }
+
+        // No grade item means no grade in the gradebook, so there are no factors to apply.
+        if (!$this->has_grade_item()) {
+            return [$penalisedgrade, $deductedmark];
         }
 
         $gradeitem = $this->get_grade_item();
@@ -7959,7 +7980,8 @@ class assign {
 
             $modified->workflowstatechanged = $this->get_instance()->markingworkflow &&
                                               ($modified->workflowstate !== false) &&
-                                              ($current->workflowstate != $modified->workflowstate);
+                                              ($current->workflowstate != $modified->workflowstate) &&
+                                              array_key_exists($modified->workflowstate, $this->get_marking_workflow_filters());
 
             $markerallocationenabled = $this->get_instance()->markingworkflow && $this->get_instance()->markingallocation;
             $modified->markerallocationchanged = $markerallocationenabled && !empty($modified->modifiedallocations);
@@ -9134,6 +9156,9 @@ class assign {
             if ($gradinglocked && $mform->elementExists('mark')) {
                 $mform->freeze('mark');
             }
+            if ($gradinglocked && $markerpage) {
+                $mform->freeze('workflowstate');
+            }
             if ($gradingstatus != ASSIGN_MARKING_WORKFLOW_STATE_RELEASED) {
                 if ($grade->grade && $grade->grade != -1) {
                     if ($settings->grade > 0) {
@@ -9988,7 +10013,7 @@ class assign {
         global $USER, $CFG, $DB;
         // If we are using marker allocation, are we allocated to this student? If not, we should not be able to update
         // their marks, even if they are in the same group as a student we are allocated to.
-        if (isset($formdata->mark) && $this->get_instance()->markingworkflow && $this->get_instance()->markingallocation) {
+        if ($this->is_marking() && $this->get_instance()->markingworkflow && $this->get_instance()->markingallocation) {
             $markerids = array_column($this->get_marker_allocations($userid, false), 'marker');
             if (!in_array($USER->id, $markerids)) {
                 return;
@@ -10008,7 +10033,7 @@ class assign {
 
         // This must run even when grading is disabled, otherwise a grade could never be released
         // (or sent back for review) once its current state makes it read-only.
-        if (isset($formdata->workflowstate) && !property_exists($formdata, 'mark')) {
+        if (isset($formdata->workflowstate) && !$this->is_marking()) {
             $flags = $this->get_user_flags($userid, true);
             $oldworkflowstate = $flags->workflowstate;
             $validstates = $this->get_marking_workflow_states_for_current_user();

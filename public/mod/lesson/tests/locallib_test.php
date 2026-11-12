@@ -41,6 +41,11 @@ require_once($CFG->dirroot.'/mod/lesson/locallib.php');
  * @copyright  2016 Adrian Greeve <adrian@moodle.com>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
+#[\PHPUnit\Framework\Attributes\CoversMethod(\lesson_page::class, 'load')]
+#[\PHPUnit\Framework\Attributes\CoversMethod(\lesson::class, 'count_all_submissions')]
+#[\PHPUnit\Framework\Attributes\CoversMethod(\lesson::class, 'count_submitted_participants')]
+#[\PHPUnit\Framework\Attributes\CoversMethod(\lesson::class, 'count_all_participants')]
+#[\PHPUnit\Framework\Attributes\CoversFunction('get_last_page_seen')]
 final class locallib_test extends \advanced_testcase {
 
     /**
@@ -274,11 +279,11 @@ final class locallib_test extends \advanced_testcase {
     /**
      * Test the get_last_attempt() method.
      *
-     * @dataProvider get_last_attempt_dataprovider
      * @param int $maxattempts Lesson setting.
      * @param array $attempts The list of student attempts.
      * @param object $expected Expected result.
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('get_last_attempt_dataprovider')]
     public function test_get_last_attempt($maxattempts, $attempts, $expected): void {
         $this->resetAfterTest();
         $this->setAdminUser();
@@ -334,10 +339,6 @@ final class locallib_test extends \advanced_testcase {
 
     /**
      * Test the count_all_attempts, count_attempted_participants and count_all_participants methods.
-     *
-     * @covers \lesson::count_all_submissions
-     * @covers \lesson::count_submitted_participants
-     * @covers \lesson::count_all_participants
      */
     public function test_count_attempts_and_participants(): void {
         global $DB;
@@ -391,10 +392,6 @@ final class locallib_test extends \advanced_testcase {
 
     /**
      * Test the count_all_attempts, count_attempted_participants and count_all_participants methods with groups.
-     *
-     * @covers \lesson::count_all_submissions
-     * @covers \lesson::count_submitted_participants
-     * @covers \lesson::count_all_participants
      */
     public function test_count_attempts_and_participants_with_groups(): void {
         global $DB;
@@ -574,12 +571,11 @@ final class locallib_test extends \advanced_testcase {
      * For unlimited attempts (maxattempts = 0) we should always stay on the question page.
      * For limited attempts, once count(attempts) >= maxattempts, we should go to the next page.
      *
-     * @dataProvider get_last_page_seen_dataprovider
      * @param int $maxattempts Lesson setting (0 = unlimited).
      * @param int $attemptcount Number of wrong attempts to create on the question page.
      * @param bool $expectnextpage Whether we expect the next page to be returned.
-     * @covers ::get_last_page_seen
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('get_last_page_seen_dataprovider')]
     public function test_get_last_page_seen_with_this_page_jumpto(int $maxattempts, int $attemptcount, bool $expectnextpage): void {
         global $DB;
 
@@ -621,5 +617,33 @@ final class locallib_test extends \advanced_testcase {
         // Decide which page we expect based on the data provider.
         $expectedpageid = $expectnextpage ? $nextpage->id : $questionpage->id;
         $this->assertEquals($expectedpageid, $lastpageid);
+    }
+
+    /**
+     * Test that a page can only be loaded via the lesson it belongs to.
+     */
+    public function test_load_page_from_other_lesson(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $lessonmodule1 = $this->getDataGenerator()->create_module('lesson', ['course' => $course->id]);
+        $lessonmodule2 = $this->getDataGenerator()->create_module('lesson', ['course' => $course->id]);
+        $lesson1 = new lesson($lessonmodule1);
+
+        /** @var \mod_lesson_generator $generator */
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_lesson');
+        $page1 = $generator->create_content($lessonmodule1);
+        $page2 = $generator->create_content($lessonmodule2);
+
+        // Loading a page via its own lesson works.
+        $page = \lesson_page::load($page1->id, $lesson1);
+        $this->assertEquals($page1->id, $page->id);
+        $this->assertEquals($lesson1->id, $page->lessonid);
+
+        // Loading a page via another lesson must fail.
+        $this->expectException(\moodle_exception::class);
+        $this->expectExceptionMessage(get_string('cannotfindpages', 'lesson'));
+        \lesson_page::load($page2->id, $lesson1);
     }
 }

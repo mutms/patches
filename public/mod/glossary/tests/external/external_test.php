@@ -28,6 +28,7 @@ use mod_glossary_external;
  * @copyright  2015 Costantino Cito <ccito@cvaconsulting.com>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
+#[\PHPUnit\Framework\Attributes\CoversMethod(\mod_glossary_external::class, 'get_entries_by_term')]
 final class external_test extends \core_external\tests\externallib_testcase {
     /**
      * Test get_glossaries_by_courses
@@ -284,6 +285,42 @@ final class external_test extends \core_external\tests\externallib_testcase {
         $this->assertEquals(3, $return['count']);
         $this->assertEquals($e1c->id, $return['entries'][0]['id']);
         $this->assertEquals($e1b->id, $return['entries'][1]['id']);
+    }
+
+    /**
+     * Test get_entries_by_letter with a multibyte letter.
+     *
+     * Multibyte characters are those encoded with more than one byte in UTF-8, such as the Cyrillic
+     * letters used here (e.g. 'К' is the two bytes 0xD0 0x9A), so they must be accepted as a letter parameter.
+     */
+    public function test_get_entries_by_letter_multibyte(): void {
+        $this->resetAfterTest(true);
+
+        $gg = $this->getDataGenerator()->get_plugin_generator('mod_glossary');
+        $c1 = $this->getDataGenerator()->create_course();
+        $g1 = $this->getDataGenerator()->create_module('glossary', ['course' => $c1->id]);
+        $u1 = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($u1->id, $c1->id);
+
+        $e1a = $gg->create_content($g1, ['approved' => 1, 'concept' => 'Коло', 'userid' => $u1->id]);
+        $e1b = $gg->create_content($g1, ['approved' => 1, 'concept' => 'кит', 'userid' => $u1->id]);
+        $e1c = $gg->create_content($g1, ['approved' => 1, 'concept' => 'Kilo', 'userid' => $u1->id]);
+
+        $this->setUser($u1);
+
+        // A Cyrillic letter matches both upper and lower case concepts, but not the Latin K.
+        $return = mod_glossary_external::get_entries_by_letter($g1->id, 'К', 0, 20, []);
+        $return = external_api::clean_returnvalue(mod_glossary_external::get_entries_by_letter_returns(), $return);
+        $this->assertCount(2, $return['entries']);
+        $this->assertEquals(2, $return['count']);
+        $this->assertEqualsCanonicalizing([$e1a->id, $e1b->id], array_column($return['entries'], 'id'));
+
+        // The Latin letter does not match the Cyrillic concepts.
+        $return = mod_glossary_external::get_entries_by_letter($g1->id, 'K', 0, 20, []);
+        $return = external_api::clean_returnvalue(mod_glossary_external::get_entries_by_letter_returns(), $return);
+        $this->assertCount(1, $return['entries']);
+        $this->assertEquals(1, $return['count']);
+        $this->assertEquals($e1c->id, $return['entries'][0]['id']);
     }
 
     public function test_get_entries_by_date(): void {
@@ -954,7 +991,6 @@ final class external_test extends \core_external\tests\externallib_testcase {
     /**
      * Test get_entries_by_multilingual_term.
      *
-     * @covers \mod_glossary_external::get_entries_by_term
      * @return void
      * @throws \coding_exception
      * @throws \invalid_response_exception
@@ -1146,6 +1182,42 @@ final class external_test extends \core_external\tests\externallib_testcase {
         $this->expectException('required_capability_exception');
         mod_glossary_external::get_entries_to_approve($g1->id, 'ALL', 'CONCEPT', 'ASC', 0, 1);
         $this->fail('Do not test anything else after this.');
+    }
+
+    /**
+     * Test get_entries_to_approve with a multibyte letter.
+     *
+     * Multibyte characters are those encoded with more than one byte in UTF-8, such as the Cyrillic
+     * letters used here (e.g. 'К' is the two bytes 0xD0 0x9A), so they must be accepted as a letter parameter.
+     */
+    public function test_get_entries_to_approve_multibyte(): void {
+        $this->resetAfterTest(true);
+
+        $gg = $this->getDataGenerator()->get_plugin_generator('mod_glossary');
+        $c1 = $this->getDataGenerator()->create_course();
+        $g1 = $this->getDataGenerator()->create_module('glossary', ['course' => $c1->id]);
+        $u1 = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($u1->id, $c1->id);
+
+        $e1a = $gg->create_content($g1, ['approved' => 0, 'concept' => 'Коло', 'userid' => $u1->id]);
+        $e1b = $gg->create_content($g1, ['approved' => 0, 'concept' => 'кит', 'userid' => $u1->id]);
+        $e1c = $gg->create_content($g1, ['approved' => 0, 'concept' => 'Kilo', 'userid' => $u1->id]);
+
+        $this->setAdminUser();
+
+        // A lower case Cyrillic letter matches both upper and lower case concepts, but not the Latin K.
+        $return = mod_glossary_external::get_entries_to_approve($g1->id, 'к', 'CONCEPT', 'ASC', 0, 20);
+        $return = external_api::clean_returnvalue(mod_glossary_external::get_entries_to_approve_returns(), $return);
+        $this->assertCount(2, $return['entries']);
+        $this->assertEquals(2, $return['count']);
+        $this->assertEqualsCanonicalizing([$e1a->id, $e1b->id], array_column($return['entries'], 'id'));
+
+        // The Latin letter does not match the Cyrillic concepts.
+        $return = mod_glossary_external::get_entries_to_approve($g1->id, 'K', 'CONCEPT', 'ASC', 0, 20);
+        $return = external_api::clean_returnvalue(mod_glossary_external::get_entries_to_approve_returns(), $return);
+        $this->assertCount(1, $return['entries']);
+        $this->assertEquals(1, $return['count']);
+        $this->assertEquals($e1c->id, $return['entries'][0]['id']);
     }
 
     public function test_get_entry_by_id(): void {

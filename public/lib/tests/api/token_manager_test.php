@@ -18,7 +18,6 @@ namespace core\api;
 
 use core\api\repository\api_token_repository;
 use core\exception\moodle_exception;
-use core\oauth2\server\repository\scope_repository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -290,14 +289,54 @@ final class token_manager_test extends \advanced_testcase {
     }
 
     /**
+     * A reminder is due at the latest reminder point passed, once, and never in a token's first half.
+     *
+     * @param int $lifetime How long the token lasts, in seconds.
+     * @param int $timeleft How long before expiry it is now, in seconds.
+     * @param int|null $remindedago How long before now the owner was last reminded, or null.
+     * @param bool $expected Whether a reminder is due.
+     */
+    #[DataProvider('reminder_due_provider')]
+    public function test_is_reminder_due(int $lifetime, int $timeleft, ?int $remindedago, bool $expected): void {
+        $this->mock_clock_with_frozen(self::NOW);
+        $expirytime = self::NOW + $timeleft;
+        $timecreated = $expirytime - $lifetime;
+        $lastreminded = $remindedago === null ? null : self::NOW - $remindedago;
+
+        $this->assertSame($expected, token_manager::is_reminder_due($timecreated, $expirytime, $lastreminded));
+    }
+
+    /**
+     * Cases for {@see test_is_reminder_due}.
+     *
+     * @return array
+     */
+    public static function reminder_due_provider(): array {
+        return [
+            'week token, created' => [WEEKSECS, WEEKSECS, null, false],
+            'week token, two days left' => [WEEKSECS, 2 * DAYSECS, null, false],
+            'week token, one day left' => [WEEKSECS, DAYSECS, null, true],
+            'week token, reminded already' => [WEEKSECS, DAYSECS - HOURSECS, HOURSECS / 2, false],
+            'year token, 31 days left' => [YEARSECS, 31 * DAYSECS, null, false],
+            'year token, 30 days left' => [YEARSECS, 30 * DAYSECS, null, true],
+            'year token, reminded at 30 days, 29 left' => [YEARSECS, 29 * DAYSECS, DAYSECS, false],
+            'year token, reminded at 30 days, 7 left' => [YEARSECS, 7 * DAYSECS, 23 * DAYSECS, true],
+            'year token, never reminded, 1 left' => [YEARSECS, DAYSECS, null, true],
+            '60 days, 30-day point at half-life' => [60 * DAYSECS, 30 * DAYSECS, null, true],
+            '59 days, 30-day point before half-life' => [59 * DAYSECS, 30 * DAYSECS, null, false],
+        ];
+    }
+
+    /**
      * Every scope the site declares is offered, keyed by the identifier a token stores.
      */
     public function test_get_available_scopes(): void {
         $scopes = $this->get_manager()->get_available_scopes();
+        $scopeutil = \core\di::make(\core\router\scope\util::class);
 
         // Compared against the repository the manager delegates to, rather than a list written
         // here: a hard coded expectation would only assert that this test was updated too.
-        $this->assertSame(array_keys((new scope_repository())->get_all_scopes()), array_keys($scopes));
+        $this->assertSame(array_keys($scopeutil->get_all_scopes()), array_keys($scopes));
         $this->assertNotEmpty($scopes);
 
         foreach ($scopes as $identifier => $scope) {

@@ -25,8 +25,9 @@ use advanced_testcase;
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @copyright 2025 Laurent David <laurent.david@moodle.com>
  * @package   mod_feedback
- * @covers \mod_feedback\manager
  */
+#[\PHPUnit\Framework\Attributes\CoversClass(\mod_feedback\manager::class)]
+#[\PHPUnit\Framework\Attributes\CoversFunction('can_see_others_in_groups')]
 final class manager_test extends advanced_testcase {
     /**
      * Data provider for test_can_see_others_in_groups.
@@ -80,10 +81,8 @@ final class manager_test extends advanced_testcase {
      * @param int $mode The group mode.
      * @param string $username The username of the user to test.
      * @param bool $expected The expected result.
-     *
-     * @covers ::can_see_others_in_groups
-     * @dataProvider can_see_others_in_groups_provider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('can_see_others_in_groups_provider')]
     public function test_can_see_others_in_groups(int $mode, string $username, bool $expected): void {
         $this->resetAfterTest();
 
@@ -111,5 +110,24 @@ final class manager_test extends advanced_testcase {
         $this->setUser($users[$username]);
         $cm = get_fast_modinfo($course)->cms[$feedback->cmid];
         $this->assertEquals($expected, manager::can_see_others_in_groups($cm));
+    }
+
+    /**
+     * Test get_template_record_if_accessible() only returns templates usable in the course.
+     */
+    public function test_get_template_record_if_accessible(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        $course1 = $this->getDataGenerator()->create_course();
+        $course2 = $this->getDataGenerator()->create_course();
+        $private = $DB->insert_record('feedback_template', ['course' => $course1->id, 'name' => 'Private', 'ispublic' => 0]);
+        $public = $DB->insert_record('feedback_template', ['course' => $course1->id, 'name' => 'Public', 'ispublic' => 1]);
+
+        $this->assertEquals($private, manager::get_template_record_if_accessible($private, $course1->id)->id);
+        $this->assertEquals($public, manager::get_template_record_if_accessible($public, $course2->id)->id);
+
+        $this->expectException(\dml_missing_record_exception::class);
+        manager::get_template_record_if_accessible($private, $course2->id);
     }
 }

@@ -442,6 +442,9 @@ class view {
      */
     protected function get_column_type($columnname) {
         if (empty($this->requiredcolumns[$columnname])) {
+            if (!class_exists($columnname) || !is_a($columnname, column_base::class, true)) {
+                throw new \coding_exception('Invalid column class: ' . $columnname);
+            }
             $this->requiredcolumns[$columnname] = new $columnname($this);
         }
     }
@@ -1255,7 +1258,7 @@ class view {
             $classes[] = 'dimmed_text';
         }
         if ($question->id == $this->lastchangedid) {
-            $classes[] = 'highlight text-dark';
+            $classes[] = 'highlight text-body';
         }
         $classes[] = 'r' . ($rowcount % 2);
         return $classes;

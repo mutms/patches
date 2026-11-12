@@ -30048,40 +30048,6 @@ textarea.form-control-lg {
  * Imported before the component partials so that they can each carry their own dark mode overrides next to the rules
  * those overrides correct. The dark palette itself lives in dark.scss, which is imported last.
  */
-/**
- * Emit the content as a dark colour mode override of the rule it is written inside.
- *
- * Bootstrap's own color-mode() mixin puts the [data-bs-theme] selector at the point it is included, so nesting it
- * inside a rule produces a descendant selector and the attribute is on the html tag, an ancestor. This prefixes the
- * enclosing selector instead, which both matches and inherits that selector's specificity, so an override always
- * wins against the rule it belongs to without the ancestors having to be repeated by hand.
- *
- * selector-nest() rather than interpolating the parent directly: interpolation would paste a comma separated parent
- * in as one string and only the first of its selectors would get the attribute, letting the rest leak into light
- * mode.
- *
- * Use it beside the rule being corrected:
- *
- *     .my-panel {
- *         background-color: $gray-100;
- *
- *         @include dark-mode {
- *             background-color: var(--bs-gray-200);
- *         }
- *     }
- */
-/**
- * Lighten a colour until it is readable on a dark surface.
- *
- * The theme colours are chosen for a white page and are mostly too dark to use as text once the page is dark. This
- * tints them in 5% steps and returns the first tint which reaches the required contrast, so that the dark palette
- * keeps meeting WCAG AA even when a site changes the brand colour.
- *
- * @param {Color} $color The colour to lighten.
- * @param {Color} $background The surface the colour is drawn on.
- * @param {Number} $min The contrast ratio to reach.
- * @return {Color}
- */
 /* core.less */
 :root {
   --bs-state-success-bg: #d7e4d6;
@@ -31318,6 +31284,7 @@ audio.mediaplugin_html5audio {
 
 .moodle-dialogue-exception .moodle-exception-message {
   margin: 1em;
+  overflow-wrap: anywhere;
 }
 
 .moodle-dialogue-exception .moodle-exception-param {
@@ -31398,7 +31365,7 @@ audio.mediaplugin_html5audio {
 
 .chooserdialogue .moodle-dialogue-wrap .moodle-dialogue-bd {
   padding: 0;
-  background: #f2f2f2;
+  background: var(--mds-bg-surface-strong);
   border-bottom-right-radius: 10px;
   border-bottom-left-radius: 10px;
 }
@@ -31423,7 +31390,7 @@ audio.mediaplugin_html5audio {
 /* Various settings for the options area */
 .choosercontainer #chooseform .options {
   position: relative;
-  border-bottom: 1px solid #bbb;
+  border-bottom: 1px solid var(--mds-border-default);
 }
 
 /* Only set these options if we're showing the js container */
@@ -31474,7 +31441,7 @@ audio.mediaplugin_html5audio {
   display: block;
   margin: 0;
   padding: 0.5rem 0;
-  border-bottom: 1px solid #ffffff;
+  border-bottom: 1px solid var(--mds-bg-surface-default);
 }
 
 .choosercontainer #chooseform .option .icon {
@@ -31508,7 +31475,7 @@ audio.mediaplugin_html5audio {
   left: 240px;
   margin: 0;
   padding: 1.6em;
-  background-color: #ffffff;
+  background-color: var(--mds-bg-surface-default);
   overflow-x: hidden;
   overflow-y: auto;
   line-height: 2em;
@@ -31521,7 +31488,7 @@ audio.mediaplugin_html5audio {
 }
 
 .choosercontainer #chooseform .selected {
-  background-color: #ffffff;
+  background-color: var(--mds-bg-surface-default);
   margin-top: -1px;
   padding-top: 1px;
 }
@@ -34103,16 +34070,15 @@ img.icon {
  *   band         The header strip the brand logo sits on.
  *   button       The CTA button fill. Not always the band colour: the Partners and feedback bands are light,
  *                so their buttons are near black instead.
- *   button-hover The hover and active fill. Given rather than derived, because it does not move in one
- *                direction across the four cards: the two brand fills darken, and the two near black ones
- *                lighten, having no room left to darken.
+ *   button-hover The hover and active fill. Given as a lighter shade across all four cards,
+ *                as the dark button fills have no room to darken further.
  *   tick         The check icons in the card body.
  */
 /* "From Moodle" CTA card grid on the admin notifications page (MDL-89290). */
 .admin-notification-ctas {
   margin-top: var(--mds-spacing-xl, 2rem);
   padding: var(--mds-spacing-xl, 2rem) 0;
-  background-color: var(--mds-bg-surface-subtle, #f8f9fa);
+  background-color: var(--bs-body-bg);
   border-top: 1px solid var(--mds-border-subtle, #e9ecef);
 }
 .admin-notification-ctas .admin-notification-ctas-heading {
@@ -34145,27 +34111,27 @@ img.icon {
 }
 
 .admin-notification-ctas .admin-notification-cta[data-cta-key=marketplace] {
-  --cta-band: #570d82;
-  --cta-button: #570d82;
-  --cta-button-hover: #32064c;
-  --cta-tick: #570d82;
+  --cta-band: #32064c;
+  --cta-button: #32064c;
+  --cta-button-hover: #4a0a70;
+  --cta-tick: #32064c;
 }
 [data-bs-theme=dark] .admin-notification-ctas .admin-notification-cta[data-cta-key=marketplace] {
-  --cta-button: #a37aba;
-  --cta-button-hover: #c4aad3;
-  --cta-tick: #bc9ecd;
+  --cta-button: #9983a6;
+  --cta-button-hover: #b7a8c0;
+  --cta-tick: #b7a8c0;
 }
 
 .admin-notification-ctas .admin-notification-cta[data-cta-key=moodlecloud] {
-  --cta-band: #194866;
-  --cta-button: #194866;
-  --cta-button-hover: #102f42;
-  --cta-tick: #194866;
+  --cta-band: #282828;
+  --cta-button: #282828;
+  --cta-button-hover: #545454;
+  --cta-tick: #282828;
 }
 [data-bs-theme=dark] .admin-notification-ctas .admin-notification-cta[data-cta-key=moodlecloud] {
-  --cta-button: #7591a3;
-  --cta-button-hover: #a3b6c2;
-  --cta-tick: #98adba;
+  --cta-button: #898989;
+  --cta-button-hover: #b4b4b4;
+  --cta-tick: darkgray;
 }
 
 .admin-notification-ctas .admin-notification-cta[data-cta-key=partners] {
@@ -34203,12 +34169,6 @@ img.icon {
   width: auto;
   max-height: 100%;
 }
-.admin-notification-ctas .admin-notification-cta .admin-notification-cta-logo-pill {
-  display: inline-flex;
-  padding: var(--mds-spacing-xs, 0.5rem) var(--mds-spacing-sm, 0.75rem);
-  background-color: #ffffff;
-  border-radius: var(--mds-border-radius-sm, 0.375rem);
-}
 .admin-notification-ctas .admin-notification-cta .admin-notification-cta-body {
   display: flex;
   flex: 1;
@@ -34224,7 +34184,7 @@ img.icon {
 }
 .admin-notification-ctas .admin-notification-cta .admin-notification-cta-ticks li {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: var(--mds-spacing-xxs, 0.25rem);
 }
 .admin-notification-ctas .admin-notification-cta .admin-notification-cta-ticks .admin-notification-cta-tick {
@@ -34445,7 +34405,7 @@ img.icon {
 @media (min-width: 576px) {
   .card-carousel .card {
     flex: 0 1 auto;
-    width: 240px;
+    width: 245px;
     max-width: 100%;
   }
 }
@@ -34459,7 +34419,6 @@ img.icon {
 
 .block_recentlyaccessedcourses .paging-bar-container {
   margin-top: -2.4rem;
-  padding-right: 0.5rem;
   justify-content: flex-end;
 }
 @media (max-width: 575.98px) {
@@ -34521,6 +34480,9 @@ aside[id^=block-region-side-] .block_recentlyaccesseditems .card:nth-of-type(n+4
 
 .block_timeline .paged-content-page-container {
   background-color: var(--bs-body-bg);
+}
+.block_timeline .list-group-item {
+  background-color: var(--bs-card-bg);
 }
 
 .block_timeline .event-action {
@@ -38226,6 +38188,12 @@ a.ygtvspacer:hover {
   margin: 0 20px;
 }
 
+.file-picker.fp-dlg .fp-dlg-butrename {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .file-picker.fp-msg {
   text-align: center;
 }
@@ -40658,6 +40626,7 @@ input#id_externalurl {
   display: inline-block;
 }
 
+.groupselector,
 .singleselect {
   max-width: 100%;
 }
@@ -45189,6 +45158,9 @@ body.tox-fullscreen .tox.tox-tinymce-aux {
     padding-left: 0;
     padding-right: 0;
   }
+  body:not(.pagelayout-standard):not(.limitedwidth) .main-inner > .header-maxwidth {
+    max-width: none;
+  }
 }
 .drawer-toggles .drawer-toggler {
   position: fixed;
@@ -45295,12 +45267,14 @@ body.tox-fullscreen .tox.tox-tinymce-aux {
   #page.drawers.show-drawer-left {
     margin-left: 285px;
     margin-right: 0;
+    padding-left: 0;
   }
 }
 @media (min-width: 992px) {
   #page.drawers.show-drawer-right {
     margin-left: 0;
     margin-right: 315px;
+    padding-right: 0;
   }
 }
 @media (min-width: 992px) {

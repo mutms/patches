@@ -21,10 +21,10 @@ namespace tool_langimport;
  *
  * @package    tool_langimport
  * @category   test
- * @covers \tool_langimport\locale
  * @copyright  2018 Université Rennes 2 {@link https://www.univ-rennes2.fr}
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
+#[\PHPUnit\Framework\Attributes\CoversClass(\tool_langimport\locale::class)]
 final class locale_test extends \advanced_testcase {
     /** @var string Locale */
     protected string $locale;
@@ -55,7 +55,7 @@ final class locale_test extends \advanced_testcase {
                 'set_locale',
             ])
             ->getMock();
-        $mock->method('get_locale')->will($this->returnValue('en'));
+        $mock->method('get_locale')->willReturn('en');
         $setinvocations = $this->exactly(2);
         $mock
             ->expects($setinvocations)
@@ -78,7 +78,7 @@ final class locale_test extends \advanced_testcase {
                 'set_locale',
             ])
             ->getMock();
-        $mock->expects($this->exactly(1))->method('get_locale')->will($this->returnValue('en'));
+        $mock->expects($this->exactly(1))->method('get_locale')->willReturn('en');
         $setinvocations = $this->exactly(2);
         $mock
             ->expects($setinvocations)

@@ -136,6 +136,13 @@ Feature: Create OAuth2 clients
     And I set the field "redirecturi[0]" to "http://localhost/callback"
     And I press "Create client"
     And I should see "You must select at least one scope." in the "Scopes" "form_row"
+    # The scopes checkboxes sit in a fieldset so the error names the group as a unit, rather
+    # than any single checkbox, to a screen reader: it is part of the legend, the fieldset's
+    # accessible name, which every screen reader announces on focus.
+    And "#id_scopesfieldset" "css_element" should exist
+    And the "aria-invalid" attribute of "#id_scopesfieldset" "css_element" should contain "true"
+    And I should see "You must select at least one scope." in the "#id_scopesfieldset legend" "css_element"
+    And the "class" attribute of "#id_scopesfieldset" "css_element" should contain "border-danger"
 
   Scenario: Generate secrets for a confidential OAuth2 client
     Given I click on "Create client" "link"
@@ -532,3 +539,28 @@ Feature: Create OAuth2 clients
     And I log in as "user"
     And I click on "Site administration" "link"
     And "OAuth 2 clients" "link" should not exist
+
+  Scenario: Generating a secret notifies everyone who can manage OAuth2 clients
+    Given the following "users" exist:
+      | username | firstname | lastname | email             |
+      | maria    | Maria     | Manager  | maria@example.com |
+    And the following "role assigns" exist:
+      | user  | role    | contextlevel | reference |
+      | maria | manager | System       |           |
+    And I click on "Create client" "link"
+    And I set the field "Name" to "Reporting service"
+    And I click on "Confidential" "radio"
+    And I set the field "Authorization Code" to "0"
+    And I set the field "Client credentials" to "1"
+    And I set the field "View courses and course categories" to "1"
+    And I press "Create client"
+    And I press "Generate secret"
+    And I click on "Close" "button" in the "Secret generated" "dialogue"
+    # Only tasks queued before the current second are due, so give the notice's task a second.
+    And I wait "1" seconds
+    And I run all adhoc tasks
+    And I log in as "maria"
+    When I open the notification popover
+    And I click on "View full notification" "link" in the ".popover-region-notifications" "css_element"
+    Then I should see "New secret created for OAuth 2 client \"Reporting service\""
+    And I should see "Admin User created a new secret for the OAuth 2 client \"Reporting service\""

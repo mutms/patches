@@ -28,10 +28,11 @@ require_once($CFG->dirroot . '/repository/nextcloud/tests/fixtures/testable_acce
  * Class repository_nextcloud_testcase
  *
  * @package repository_nextcloud
- * @group repository_nextcloud
  * @copyright  2017 Project seminar (Learnweb, University of Münster)
  * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
+#[\PHPUnit\Framework\Attributes\CoversMethod(\repository_nextcloud\access_controlled_link_manager::class, 'transfer_file_to_path')]
+#[\PHPUnit\Framework\Attributes\Group('repository_nextcloud')]
 final class access_controlled_link_manager_test extends \advanced_testcase {
 
     /** @var null|testable_access_controlled_link_manager a malleable variant of the access_controlled_link_manager. */
@@ -136,8 +137,9 @@ final class access_controlled_link_manager_test extends \advanced_testcase {
  </data>
 </ocs>
 XML;
-        $this->ocsmockclient->expects($this->once())->method('call')->with('create_share', $params)->will(
-            $this->returnValue($expectedresponse));
+        $this->ocsmockclient->expects($this->once())->method('call')->with('create_share', $params)->willReturn(
+            $expectedresponse
+        );
 
         $result = $this->linkmanager->create_share_user_sysaccount("/ambient.txt");
         $xml = simplexml_load_string($expectedresponse);
@@ -167,8 +169,9 @@ XML;
     <data/>
 </ocs>
 XML;
-        $this->ocsmockclient->expects($this->once())->method('call')->with('delete_share', $deleteshareparams)->will(
-            $this->returnValue($returnxml));
+        $this->ocsmockclient->expects($this->once())->method('call')->with('delete_share', $deleteshareparams)->willReturn(
+            $returnxml
+        );
         $this->linkmanager->delete_share_dataowner_sysaccount($shareid, 'repository_nextcloud');
 
     }
@@ -312,8 +315,6 @@ XML;
     }
     /**
      * Test whether the webdav client gets the right params and whether function handles overwrite.
-     *
-     * @covers \repository_nextcloud\access_controlled_link_manager::transfer_file_to_path
      */
     public function test_transfer_file_to_path_overwritefile(): void {
         // Initialize params.
@@ -437,8 +438,9 @@ XML;
 XML;
         $this->set_private_property($this->ocsmockclient, 'systemocsclient', $this->linkmanager);
 
-        $this->ocsmockclient->expects($this->exactly(3))->method('call')->with('get_shares', $params)->will(
-            $this->returnValue($expectedresponse));
+        $this->ocsmockclient->expects($this->exactly(3))->method('call')->with('get_shares', $params)->willReturn(
+            $expectedresponse
+        );
         $xmlobjuser1 = (int) $this->linkmanager->get_shares_from_path($reference->link, 'user2');
         $xmlobjuser2 = (int) $this->linkmanager->get_shares_from_path($reference->link, 'user1');
 
@@ -585,7 +587,8 @@ XML;
         $this->set_private_property($this->ocsmockclient, 'systemocsclient', $this->linkmanager);
 
         $this->ocsmockclient->expects($this->exactly(3))->method('call')->with('get_information_of_share',
-            $this->logicalOr($params303, $params302))->will($this->returnValue($expectedresponse));
+            $this->logicalOr($params303, $params302)
+        )->willReturn($expectedresponse);
 
         // Test function for two different users. Setting the id is just a dummy value since always $expectedresponse ...
         // ... is returned.

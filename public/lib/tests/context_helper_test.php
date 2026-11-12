@@ -24,12 +24,11 @@ namespace core;
  * @package   core
  * @copyright Petr Skoda
  * @license   https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @coversDefaultClass \core\context_helper
  */
+#[\PHPUnit\Framework\Attributes\CoversClass(\core\context_helper::class)]
 final class context_helper_test extends \advanced_testcase {
     /**
      * Tests covered method.
-     * @covers ::parse_external_level
      */
     public function test_parse_external_level(): void {
         $this->assertSame(context\system::class, context_helper::parse_external_level('system'));
@@ -64,7 +63,6 @@ final class context_helper_test extends \advanced_testcase {
 
     /**
      * Tests covered method.
-     * @covers ::resolve_behat_reference
      */
     public function test_resolve_behat_reference(): void {
         $this->assertNull(context_helper::resolve_behat_reference('blahbla', 'blahbla'));
@@ -84,7 +82,6 @@ final class context_helper_test extends \advanced_testcase {
 
     /**
      * Tests covered method.
-     * @covers ::get_class_for_level
      */
     public function test_get_class_for_level(): void {
         $this->assertSame(context\system::class, context_helper::get_class_for_level(CONTEXT_SYSTEM));
@@ -117,7 +114,6 @@ final class context_helper_test extends \advanced_testcase {
 
     /**
      * Tests covered method.
-     * @covers ::get_all_levels
      */
     public function test_get_all_levels(): void {
         $levels = context_helper::get_all_levels();
@@ -158,7 +154,6 @@ final class context_helper_test extends \advanced_testcase {
 
     /**
      * Tests covered method.
-     * @covers ::get_child_levels
      */
     public function test_get_child_levels(): void {
         $alllevels = context_helper::get_all_levels();
@@ -204,7 +199,6 @@ final class context_helper_test extends \advanced_testcase {
 
     /**
      * Tests covered method.
-     * @covers ::get_compatible_levels
      */
     public function test_get_compatible_levels(): void {
         $levels = context_helper::get_compatible_levels('manager');
@@ -259,7 +253,6 @@ final class context_helper_test extends \advanced_testcase {
 
     /**
      * Tests covered method.
-     * @covers ::cleanup_instances
      */
     public function test_cleanup_instances(): void {
         global $DB;
@@ -294,7 +287,6 @@ final class context_helper_test extends \advanced_testcase {
 
     /**
      * Tests covered method.
-     * @covers ::create_instances
      */
     public function test_create_instances(): void {
         global $DB;
@@ -324,7 +316,6 @@ final class context_helper_test extends \advanced_testcase {
 
     /**
      * Tests covered method.
-     * @covers ::build_all_paths
      */
     public function test_build_all_paths(): void {
         $this->resetAfterTest();
@@ -337,7 +328,6 @@ final class context_helper_test extends \advanced_testcase {
 
     /**
      * Tests covered method.
-     * @covers ::reset_caches
      */
     public function test_reset_caches(): void {
         $this->resetAfterTest();
@@ -349,7 +339,6 @@ final class context_helper_test extends \advanced_testcase {
 
     /**
      * Tests covered method.
-     * @covers ::get_preload_record_columns
      */
     public function test_get_preload_record_columns(): void {
         $this->resetAfterTest();
@@ -371,7 +360,6 @@ final class context_helper_test extends \advanced_testcase {
 
     /**
      * Tests covered method.
-     * @covers ::get_preload_record_columns_sql
      */
     public function test_get_preload_record_columns_sql(): void {
         global $DB;
@@ -393,7 +381,6 @@ final class context_helper_test extends \advanced_testcase {
 
     /**
      * Tests covered method.
-     * @covers ::preload_from_record
      */
     public function test_preload_from_record(): void {
         global $DB;
@@ -414,7 +401,6 @@ final class context_helper_test extends \advanced_testcase {
 
     /**
      * Tests covered method.
-     * @covers ::preload_contexts_by_id
      */
     public function test_preload_contexts_by_id(): void {
         global $DB;
@@ -429,7 +415,6 @@ final class context_helper_test extends \advanced_testcase {
 
     /**
      * Tests covered method.
-     * @covers ::preload_course
      */
     public function test_preload_course(): void {
         global $SITE;
@@ -438,7 +423,6 @@ final class context_helper_test extends \advanced_testcase {
 
     /**
      * Tests covered method.
-     * @covers ::delete_instance
      */
     public function test_delete_instance(): void {
         $this->resetAfterTest();
@@ -458,7 +442,6 @@ final class context_helper_test extends \advanced_testcase {
 
     /**
      * Tests covered method.
-     * @covers ::get_level_name
      */
     public function test_get_level_name(): void {
         $allevels = context_helper::get_all_levels();
@@ -477,7 +460,6 @@ final class context_helper_test extends \advanced_testcase {
 
     /**
      * Tests covered method.
-     * @covers ::get_navigation_filter_context
      */
     public function test_get_navigation_filter_context(): void {
         global $CFG;

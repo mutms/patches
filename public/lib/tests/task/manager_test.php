@@ -31,8 +31,10 @@ require_once(__DIR__ . '/../fixtures/task_fixtures.php');
  * @category  test
  * @copyright 2019 Brendan Heywood <brendan@catalyst-au.net>
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @covers \core\task\manager
  */
+#[\PHPUnit\Framework\Attributes\CoversClass(\core\task\manager::class)]
+#[\PHPUnit\Framework\Attributes\CoversMethod(\core\task\manager::class, 'get_next_adhoc_task')]
+#[\PHPUnit\Framework\Attributes\CoversMethod(\core\task\manager::class, 'adhoc_task_delayed')]
 final class manager_test extends \advanced_testcase {
     /**
      * Data provider for test_get_candidate_adhoc_tasks.
@@ -210,7 +212,6 @@ final class manager_test extends \advanced_testcase {
     /**
      * Test that the candidate adhoc tasks are returned in the right order.
      *
-     * @dataProvider get_candidate_adhoc_tasks_provider
      *
      * @param int $concurrencylimit The max number of runners each task can consume
      * @param int $limit SQL limit
@@ -218,6 +219,7 @@ final class manager_test extends \advanced_testcase {
      * @param array $tasks Array of tasks to put in DB and retrieve
      * @param array $expected Array of expected classnames
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('get_candidate_adhoc_tasks_provider')]
     public function test_get_candidate_adhoc_tasks(
         int $concurrencylimit,
         int $limit,
@@ -352,8 +354,6 @@ final class manager_test extends \advanced_testcase {
      * Test that get_next_adhoc_task() skips orphaned tasks whose class no longer exists
      * (e.g. because the providing plugin was removed) instead of throwing and blocking
      * dispatch of other valid tasks.
-     *
-     * @covers \core\task\manager::get_next_adhoc_task
      */
     public function test_get_next_adhoc_task_skips_orphaned_task_with_invalid_classname(): void {
         global $DB;
@@ -406,10 +406,10 @@ final class manager_test extends \advanced_testcase {
         $stubpluginman = $this->createStub(\core_plugin_manager::class);
         $stubpluginman
             ->method('get_plugin_info')
-            ->will($this->returnValueMap([
+            ->willReturnMap([
                 ['fullsubtype_example', $stubavailableplugininfo],
                 ['fulldeprecatedsubtype_test', $stubdeprecatedplugininfo],
-            ]));
+            ]);
 
         $pluginman = new \ReflectionClass(\core_plugin_manager::class);
         $pluginman->setStaticPropertyValue('singletoninstance', $stubpluginman);
@@ -485,11 +485,11 @@ final class manager_test extends \advanced_testcase {
         $stubdeletedplugininfo->component = "fulldeletedsubtype_demo";
         $stubpluginman = $this->createStub(\core_plugin_manager::class);
         $stubpluginman->method('get_plugin_info')
-            ->will($this->returnValueMap([
+            ->willReturnMap([
                 ['fullsubtype_example', $stubavailableplugininfo],
                 ['fulldeprecatedsubtype_test', $stubdeprecatedplugininfo],
                 ['fulldeletedsubtype_demo', $stubdeletedplugininfo],
-            ]));
+            ]);
         $pluginmanrc = new \ReflectionClass(\core_plugin_manager::class);
         $pluginmanrc->setStaticPropertyValue('singletoninstance', $stubpluginman);
 
@@ -545,9 +545,9 @@ final class manager_test extends \advanced_testcase {
         $stubpluginman = $this->createStub(\core_plugin_manager::class);
         $stubpluginman
             ->method('get_plugin_info')
-            ->will($this->returnValueMap([
+            ->willReturnMap([
                 ['fullsubtype_example', $stubavailableplugininfo],
-            ]));
+            ]);
         $pluginmanrc = new \ReflectionClass(\core_plugin_manager::class);
         $pluginmanrc->setStaticPropertyValue('singletoninstance', $stubpluginman);
 
@@ -566,9 +566,9 @@ final class manager_test extends \advanced_testcase {
         $stubpluginman = $this->createStub(\core_plugin_manager::class);
         $stubpluginman
             ->method('get_plugin_info')
-            ->will($this->returnValueMap([
+            ->willReturnMap([
                 ['fullsubtype_example', $stubdeprecatedplugininfo],
-            ]));
+            ]);
         $pluginmanrc->setStaticPropertyValue('singletoninstance', $stubpluginman);
 
         // Assert prior-queued tasks can be fetched and run.
@@ -585,11 +585,10 @@ final class manager_test extends \advanced_testcase {
      * Test that adhoc_task_delayed schedules a task correctly, for both exponential
      * backoff (null delay) and an explicit soft retry delay.
      *
-     * @covers \core\task\manager::adhoc_task_delayed
-     * @dataProvider adhoc_task_delayed_provider
      * @param int|null $softretrydelay The soft retry delay to set (null for exponential backoff).
      * @param int $expectednextruntime The expected next run time after the delay.
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('adhoc_task_delayed_provider')]
     public function test_adhoc_task_delayed(?int $softretrydelay, int $expectednextruntime): void {
         global $DB;
 
@@ -643,6 +642,53 @@ final class manager_test extends \advanced_testcase {
 
         // Fail delay must be 0 — delayed tasks are not failures.
         $this->assertEquals(0, $task->get_fail_delay());
+    }
+
+    /**
+     * Test that adhoc_task_delayed() marks a task as failed once it has exhausted its
+     * last available attempt.
+     */
+    public function test_adhoc_task_delayed_marks_failed_when_attempts_exhausted(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+
+        // Freeze time.
+        $clock = $this->createMock(\core\clock::class);
+        $clock->method('time')->willReturn(1000);
+        \core\di::set(\core\clock::class, $clock);
+
+        // Create and queue task.
+        $task = new adhoc_test_task();
+        $taskid = \core\task\manager::queue_adhoc_task($task);
+
+        // Reload task from DB.
+        $record = $DB->get_record('task_adhoc', ['id' => $taskid], '*', MUST_EXIST);
+        $task = \core\task\manager::adhoc_task_from_record($record);
+
+        // Simulate this being the task's last available attempt.
+        $task->set_attempts_available(1);
+        $task->set_soft_retry_delay(120);
+        $task->set_next_run_time(1000);
+
+        $lockfactory = \core\lock\lock_config::get_lock_factory('cron');
+        $lock = $lockfactory->get_lock('adhoc_' . $taskid, 10);
+        $task->set_lock($lock);
+
+        ob_start();
+        \core\task\manager::adhoc_task_delayed($task);
+        ob_end_clean();
+
+        // Reload after update.
+        $record = $DB->get_record('task_adhoc', ['id' => $taskid], '*', MUST_EXIST);
+        $task = \core\task\manager::adhoc_task_from_record($record);
+
+        // All attempts are now used up.
+        $this->assertEquals(0, $task->get_attempts_available());
+
+        // The task must now be flagged as a genuine failure, with the same end state as a task
+        // that failed for normal reasons: fail delay capped at the maximum, not faildelay = 0.
+        $this->assertEquals(\core\task\manager::MAX_FAIL_DELAY, $task->get_fail_delay());
     }
 
     /**

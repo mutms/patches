@@ -28,6 +28,7 @@ require_once(__DIR__ . '/fixtures/restore_hack.php');
  * @copyright  2014 Petr Skoda {@link http://skodak.org/}
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
+#[\PHPUnit\Framework\Attributes\CoversFunction('require_logout')]
 final class store_test extends \advanced_testcase {
     /**
      * @var bool Determine if we disabled the GC, so it can be re-enabled in tearDown.
@@ -35,11 +36,73 @@ final class store_test extends \advanced_testcase {
     private $wedisabledgc = false;
 
     /**
+     * Test that logging out while logged in as another user records the real user.
+     */
+    public function test_logout_event_records_realuserid(): void {
+        global $DB, $USER;
+
+        $this->resetAfterTest();
+        $this->preventResetByRollback(); // Logging waits till the transaction gets committed.
+
+        $this->setAdminUser();
+        $realuserid = $USER->id;
+        $user = self::getDataGenerator()->create_user();
+
+        set_config('enabled_stores', 'logstore_standard', 'tool_log');
+        set_config('buffersize', 0, 'logstore_standard');
+        set_config('logguests', 1, 'logstore_standard');
+        get_log_manager(true);
+
+        \core\session\manager::loginas($user->id, \context_system::instance());
+        $DB->delete_records('logstore_standard_log');
+
+        require_logout();
+
+        $log = $DB->get_record('logstore_standard_log', [
+            'eventname' => '\\core\\event\\user_loggedout',
+        ], '*', MUST_EXIST);
+        $this->assertSame((int) $user->id, (int) $log->userid);
+        $this->assertSame((int) $user->id, (int) $log->objectid);
+        $this->assertSame((int) $realuserid, (int) $log->realuserid);
+    }
+
+    /**
+     * A failure in a logout observer must not leave the user logged in.
+     */
+    public function test_logout_terminates_session_when_observer_throws_error(): void {
+        global $USER;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $userid = $USER->id;
+
+        \core\event\manager::phpunit_replace_observers([
+            [
+                'eventname' => \core\event\user_loggedout::class,
+                'callback' => static function (): void {
+                    throw new \Error('Logout observer failed');
+                },
+            ],
+        ]);
+
+        try {
+            require_logout();
+            $this->fail('The observer should throw an Error.');
+        } catch (\Error $e) {
+            $this->assertSame('Logout observer failed', $e->getMessage());
+        }
+
+        $this->assertFalse(isloggedin());
+        $this->assertNotEquals($userid, $USER->id);
+        \core\event\manager::phpunit_reset();
+    }
+
+    /**
      * Tests log writing.
      *
      * @param bool $jsonformat True to test with JSON format
-     * @dataProvider log_writing_provider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('log_writing_provider')]
     public function test_log_writing(bool $jsonformat): void {
         global $DB;
         $this->resetAfterTest();
@@ -370,8 +433,8 @@ final class store_test extends \advanced_testcase {
      * Tests the decode_other function can cope with both JSON and PHP serialized format.
      *
      * @param mixed $value Value to encode and decode
-     * @dataProvider decode_other_provider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('decode_other_provider')]
     public function test_decode_other($value): void {
         $this->assertEquals($value, \logstore_standard\log\store::decode_other(serialize($value)));
         $this->assertEquals($value, \logstore_standard\log\store::decode_other(json_encode($value)));
@@ -402,8 +465,8 @@ final class store_test extends \advanced_testcase {
      * Checks that backup and restore of log data works correctly.
      *
      * @param bool $jsonformat True to test with JSON format
-     * @dataProvider log_writing_provider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('log_writing_provider')]
     public function test_backup_restore(bool $jsonformat): void {
         global $DB;
         $this->resetAfterTest();

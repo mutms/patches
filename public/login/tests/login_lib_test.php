@@ -35,6 +35,7 @@ require_once($CFG->dirroot . '/login/lib.php');
  * @copyright  2017 Juan Leyva
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
+#[\PHPUnit\Framework\Attributes\CoversFunction('core_login_generate_password_reset')]
 final class login_lib_test extends \advanced_testcase {
 
     public function test_core_login_process_password_reset_one_time_without_username_protection(): void {
@@ -159,6 +160,25 @@ final class login_lib_test extends \advanced_testcase {
         $this->assertMatchesRegularExpression('/A password reset was requested for your account/',
             quoted_printable_decode($email->body));
         $sink->clear();
+    }
+
+    /**
+     * Test that generating a new password reset token removes any previous outstanding token for the user.
+     */
+    public function test_core_login_generate_password_reset_removes_previous_token(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $user = $this->getDataGenerator()->create_user();
+
+        $firstreset = core_login_generate_password_reset($user);
+        $this->assertEquals(1, $DB->count_records('user_password_resets', ['userid' => $user->id]));
+
+        $secondreset = core_login_generate_password_reset($user);
+
+        // Only the newest token should remain, and it must be a different token/record.
+        $this->assertEquals(1, $DB->count_records('user_password_resets', ['userid' => $user->id]));
+        $this->assertNotSame($firstreset->token, $secondreset->token);
     }
 
     public function test_core_login_process_password_reset_disabled_auth(): void {
@@ -323,11 +343,11 @@ final class login_lib_test extends \advanced_testcase {
     /**
      * Test for core_login_validate_forgot_password_data().
      *
-     * @dataProvider forgot_password_data_provider
      * @param array $data Key-value array containing username and email data.
      * @param array $errors Key-value array containing error messages for the username and email fields.
      * @param array $options Options for $CFG->protectusernames, $CFG->allowaccountssameemail and $user->confirmed.
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('forgot_password_data_provider')]
     public function test_core_login_validate_forgot_password_data($data, $errors = [], $options = []): void {
         $this->resetAfterTest();
 

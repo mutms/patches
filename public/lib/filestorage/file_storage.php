@@ -45,6 +45,9 @@ require_once("$CFG->libdir/filestorage/stored_file.php");
  */
 class file_storage {
 
+    /** @var int Maximum number of characters supported by the files.filename column. */
+    public const MAX_FILENAME_LENGTH = 255;
+
     /** @var string tempdir */
     private $tempdir;
 
@@ -329,11 +332,23 @@ class file_storage {
             }
         }
 
-        // Constructing the new filename.
-        $newfilename = $basename . ' (' . $number . ')';
-        if (isset($pathinfo['extension'])) {
-            $newfilename .= '.' . $pathinfo['extension'];
-        }
+        // Build the new filename, shortening the base name to fit the filename column.
+        // Shortened names may already exist, so increment the number until one is free.
+        do {
+            $suffix = ' (' . $number . ')';
+            if (isset($pathinfo['extension'])) {
+                $suffix .= '.' . $pathinfo['extension'];
+            }
+            $newbasename = $basename;
+            $maxbasenamelength = self::MAX_FILENAME_LENGTH - core_text::strlen($suffix);
+            if ($maxbasenamelength > 0 && core_text::strlen($newbasename) > $maxbasenamelength) {
+                $newbasename = core_text::substr($newbasename, 0, $maxbasenamelength);
+            }
+            $newfilename = $newbasename . $suffix;
+            $number++;
+            $taken = $newbasename !== $basename &&
+                $this->file_exists($contextid, $component, $filearea, $itemid, $filepath, $newfilename);
+        } while ($taken);
 
         return $newfilename;
     }
@@ -1771,7 +1786,6 @@ class file_storage {
                 // weird
                 throw new file_exception('storedfileproblem', 'Can not resize image');
             }
-            imagedestroy($img);
             $img = $newimg;
 
         } else if ($hasalpha) {
@@ -1780,12 +1794,8 @@ class file_storage {
                 // Weird.
                 throw new file_exception('storedfileproblem', 'Can not copy image');
             }
-            imagedestroy($img);
             $img = $newimg;
 
-        } else {
-            // No particular processing needed for the original image.
-            imagedestroy($newimg);
         }
 
         ob_start();
@@ -1826,7 +1836,6 @@ class file_storage {
 
         $content = ob_get_contents();
         ob_end_clean();
-        imagedestroy($img);
 
         if (!$content) {
             throw new file_exception('storedfileproblem', 'Can not convert image');

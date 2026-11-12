@@ -29,8 +29,8 @@ require_once(__DIR__ . '/test_helper_trait.php');
  * @author     Andrew Madden <andrewmadden@catalyst-au.net>
  * @copyright  2020 Catalyst IT
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @covers \quizaccess_seb
  */
+#[\PHPUnit\Framework\Attributes\CoversClass(\quizaccess_seb::class)]
 final class rule_test extends \advanced_testcase {
     use \quizaccess_seb_test_helper_trait;
 
@@ -120,9 +120,8 @@ final class rule_test extends \advanced_testcase {
      *
      * @param string $setting
      * @param string $data
-     *
-     * @dataProvider valid_form_data_provider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('valid_form_data_provider')]
     public function test_validate_settings_with_valid_data(string $setting, string $data): void {
         $this->setAdminUser();
         $this->quiz = $this->create_test_quiz($this->course, settings_provider::USE_SEB_CONFIG_MANUALLY);
@@ -144,9 +143,8 @@ final class rule_test extends \advanced_testcase {
      *
      * @param string $setting
      * @param string $data
-     *
-     * @dataProvider invalid_form_data_provider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('invalid_form_data_provider')]
     public function test_validate_settings_with_invalid_data(string $setting, string $data): void {
         $this->setAdminUser();
 
@@ -965,7 +963,9 @@ final class rule_test extends \advanced_testcase {
             'seb_requiresafeexambrowser' => settings_provider::USE_SEB_CONFIG_MANUALLY,
         ], [], $form);
 
-        $this->assertContains(get_string('passwordnotset', 'quizaccess_seb'), $errors);
+        // The error must be keyed on quizpassword, so that the form shows it against the 'Require password' field.
+        $this->assertArrayHasKey('quizpassword', $errors);
+        $this->assertSame(get_string('passwordnotset', 'quizaccess_seb'), $errors['quizpassword']);
     }
 
     /**
@@ -989,7 +989,7 @@ final class rule_test extends \advanced_testcase {
             'quizpassword' => 'set',
             'seb_requiresafeexambrowser' => settings_provider::USE_SEB_CONFIG_MANUALLY,
         ], [], $form);
-        $this->assertNotContains(get_string('passwordnotset', 'quizaccess_seb'), $errors);
+        $this->assertArrayNotHasKey('quizpassword', $errors);
     }
 
     /**
@@ -1011,7 +1011,7 @@ final class rule_test extends \advanced_testcase {
             'seb_requiresafeexambrowser' => settings_provider::USE_SEB_NO,
         ], [], $form);
 
-        $this->assertNotContains(get_string('passwordnotset', 'quizaccess_seb'), $errors);
+        $this->assertArrayNotHasKey('quizpassword', $errors);
     }
 
     /**

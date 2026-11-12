@@ -31,8 +31,10 @@ require_once($CFG->dirroot . '/mod/quiz/tests/quiz_question_helper_test_trait.ph
  * @category  test
  * @copyright 2013 Adrian Greeve
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @covers \mod_quiz\structure
  */
+#[\PHPUnit\Framework\Attributes\CoversClass(\mod_quiz\structure::class)]
+#[\PHPUnit\Framework\Attributes\CoversFunction('get_question_version_info')]
+#[\PHPUnit\Framework\Attributes\CoversFunction('has_use_capability')]
 final class structure_test extends \advanced_testcase {
 
     use \quiz_question_helper_test_trait;
@@ -185,6 +187,56 @@ final class structure_test extends \advanced_testcase {
 
         $this->expectException(\coding_exception::class);
         $structure->remove_section_heading($section->id);
+    }
+
+    public function test_section_methods_are_scoped_to_their_quiz(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        $quizgenerator = $this->getDataGenerator()->get_plugin_generator('mod_quiz');
+
+        // The first quiz owns the section that another quiz will try to reach.
+        $quizobj = $quizgenerator->create_test_quiz([
+                'Heading 1',
+                ['TF1', 1, 'truefalse'],
+                'Heading 2',
+                ['TF2', 2, 'truefalse'],
+        ]);
+        $sections = structure::create_for_quiz($quizobj)->get_sections();
+        $section = end($sections);
+
+        // The caller is only authorised for this quiz.
+        $otherstructure = structure::create_for_quiz($quizgenerator->create_test_quiz([
+                ['TF3', 1, 'truefalse'],
+        ]));
+
+        // Each method must reject a section id that belongs to another quiz, and leave the section unchanged.
+        try {
+            $otherstructure->set_section_heading($section->id, 'New heading');
+            $this->fail('set_section_heading() accepted a section id from another quiz.');
+        } catch (\dml_missing_record_exception) {
+            $this->assertEquals(
+                $section->heading,
+                $DB->get_field('quiz_sections', 'heading', ['id' => $section->id])
+            );
+        }
+
+        try {
+            $otherstructure->set_section_shuffle($section->id, 1);
+            $this->fail('set_section_shuffle() accepted a section id from another quiz.');
+        } catch (\dml_missing_record_exception) {
+            $this->assertEquals(
+                $section->shufflequestions,
+                $DB->get_field('quiz_sections', 'shufflequestions', ['id' => $section->id])
+            );
+        }
+
+        try {
+            $otherstructure->remove_section_heading($section->id);
+            $this->fail('remove_section_heading() accepted a section id from another quiz.');
+        } catch (\dml_missing_record_exception) {
+            $this->assertTrue($DB->record_exists('quiz_sections', ['id' => $section->id]));
+        }
     }
 
     public function test_move_slot_to_the_same_place_does_nothing(): void {
@@ -1074,8 +1126,6 @@ final class structure_test extends \advanced_testcase {
 
     /**
      * Test to get the version information for a question to show in the version selection dropdown.
-     *
-     * @covers ::get_question_version_info
      */
     public function test_get_version_choices_for_slot(): void {
         $this->resetAfterTest();
@@ -1107,8 +1157,6 @@ final class structure_test extends \advanced_testcase {
 
     /**
      * Test the current user have '...use' capability over the question(s) in a given slot.
-     *
-     * @covers ::has_use_capability
      */
     public function test_has_use_capability(): void {
         $this->resetAfterTest();

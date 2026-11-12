@@ -35,10 +35,11 @@ require_once($CFG->libdir . '/webdavlib.php');
 
 /**
  * Class repository_nextcloud_lib_testcase
- * @group repository_nextcloud
  * @copyright  2017 Project seminar (Learnweb, University of Münster)
  * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
+#[\PHPUnit\Framework\Attributes\CoversFunction('search')]
+#[\PHPUnit\Framework\Attributes\Group('repository_nextcloud')]
 final class lib_test extends \advanced_testcase {
 
     /** @var null|\repository_nextcloud the repository_nextcloud object, which the tests are run on. */
@@ -214,15 +215,15 @@ final class lib_test extends \advanced_testcase {
         $this->setUser();
         // WebDAV socket is not opened.
         $mock = $this->createMock(\webdav_client::class);
-        $mock->expects($this->once())->method('open')->will($this->returnValue(false));
+        $mock->expects($this->once())->method('open')->willReturn(false);
         $private = $this->set_private_property($mock, 'dav');
 
         $this->assertEquals($ret, $this->repo->get_listing('/'));
 
         // Response is not an array.
         $mock = $this->createMock(\webdav_client::class);
-        $mock->expects($this->once())->method('open')->will($this->returnValue(true));
-        $mock->expects($this->once())->method('ls')->will($this->returnValue('notanarray'));
+        $mock->expects($this->once())->method('open')->willReturn(true);
+        $mock->expects($this->once())->method('ls')->willReturn('notanarray');
         $private->setValue($this->repo, $mock);
 
         $this->assertEquals($ret, $this->repo->get_listing('/'));
@@ -278,8 +279,8 @@ final class lib_test extends \advanced_testcase {
 
         // Valid response from the client.
         $mock = $this->createMock(\webdav_client::class);
-        $mock->expects($this->once())->method('open')->will($this->returnValue(true));
-        $mock->expects($this->once())->method('ls')->will($this->returnValue($response));
+        $mock->expects($this->once())->method('open')->willReturn(true);
+        $mock->expects($this->once())->method('ls')->willReturn($response);
         $this->set_private_property($mock, 'dav');
 
         $ls = $this->repo->get_listing('/');
@@ -348,8 +349,8 @@ final class lib_test extends \advanced_testcase {
 
         // Valid response from the client.
         $mock = $this->createMock(\webdav_client::class);
-        $mock->expects($this->once())->method('open')->will($this->returnValue(true));
-        $mock->expects($this->once())->method('ls')->will($this->returnValue($response));
+        $mock->expects($this->once())->method('open')->willReturn(true);
+        $mock->expects($this->once())->method('ls')->willReturn($response);
         $this->set_private_property($mock, 'dav');
 
         $ls = $this->repo->get_listing('/dir/');
@@ -413,7 +414,7 @@ XML;
         ];
 
         // With test whether mock is called with right parameters.
-        $mock->expects($this->once())->method('call')->with('create_share', $ocsquery)->will($this->returnValue($expectedresponse));
+        $mock->expects($this->once())->method('call')->with('create_share', $ocsquery)->willReturn($expectedresponse);
         $this->set_private_property($mock, 'ocsclient');
 
         // Method does extract the link from the xml format.
@@ -447,7 +448,7 @@ XML;
         ];
 
         // With test whether mock is called with right parameters.
-        $mock->expects($this->once())->method('call')->with('create_share', $ocsquery)->will($this->returnValue($expectedresponse));
+        $mock->expects($this->once())->method('call')->with('create_share', $ocsquery)->willReturn($expectedresponse);
         $this->set_private_property($mock, 'ocsclient');
 
         // Suppress (expected) XML parse error... Nextcloud sometimes returns JSON on extremely bad errors.
@@ -479,7 +480,7 @@ JSON;
         ];
 
         // With test whether mock is called with right parameters.
-        $mock->expects($this->once())->method('call')->with('create_share', $ocsquery)->will($this->returnValue($expectedresponse));
+        $mock->expects($this->once())->method('call')->with('create_share', $ocsquery)->willReturn($expectedresponse);
         $this->set_private_property($mock, 'ocsclient');
 
         // Suppress (expected) XML parse error... Nextcloud sometimes returns JSON on extremely bad errors.
@@ -511,7 +512,7 @@ JSON;
 
         $this->assertEquals($this->repo->print_login(), $this->repo->logout());
 
-        $mock->expects($this->exactly(2))->method('get_login_url')->will($this->returnValue(new \moodle_url('url')));
+        $mock->expects($this->exactly(2))->method('get_login_url')->willReturn(new \moodle_url('url'));
 
         $this->repo->options['ajax'] = true;
         $this->assertEquals($this->repo->print_login(), $this->repo->logout());
@@ -523,15 +524,15 @@ JSON;
     public function test_get_file(): void {
         // WebDAV socket is not open.
         $mock = $this->createMock(\webdav_client::class);
-        $mock->expects($this->once())->method('open')->will($this->returnValue(false));
+        $mock->expects($this->once())->method('open')->willReturn(false);
         $private = $this->set_private_property($mock, 'dav');
 
         $this->assertFalse($this->repo->get_file('path'));
 
         // WebDAV socket is open and the request successful.
         $mock = $this->createMock(\webdav_client::class);
-        $mock->expects($this->once())->method('open')->will($this->returnValue(true));
-        $mock->expects($this->once())->method('get_file')->will($this->returnValue(true));
+        $mock->expects($this->once())->method('open')->willReturn(true);
+        $mock->expects($this->once())->method('get_file')->willReturn(true);
         $private->setValue($this->repo, $mock);
 
         $result = $this->repo->get_file('path', 'file');
@@ -557,7 +558,7 @@ JSON;
      */
     public function test_check_login(): void {
         $mock = $this->createMock(\core\oauth2\client::class);
-        $mock->expects($this->once())->method('is_logged_in')->will($this->returnValue(true));
+        $mock->expects($this->once())->method('is_logged_in')->willReturn(true);
         $this->set_private_property($mock, 'client');
 
         $this->assertTrue($this->repo->check_login());
@@ -567,7 +568,7 @@ JSON;
      */
     public function test_print_login(): void {
         $mock = $this->createMock(\core\oauth2\client::class);
-        $mock->expects($this->exactly(2))->method('get_login_url')->will($this->returnValue(new \moodle_url('url')));
+        $mock->expects($this->exactly(2))->method('get_login_url')->willReturn(new \moodle_url('url'));
         $this->set_private_property($mock, 'client');
 
         // Test with ajax activated.
@@ -611,7 +612,7 @@ JSON;
         $fakeaccesstoken = new \stdClass();
         $fakeaccesstoken->token = "fake access token";
         $oauthmock = $this->createMock(\core\oauth2\client::class);
-        $oauthmock->expects($this->once())->method('get_accesstoken')->will($this->returnValue($fakeaccesstoken));
+        $oauthmock->expects($this->once())->method('get_accesstoken')->willReturn($fakeaccesstoken);
         $this->set_private_property($oauthmock, 'client');
 
         $dav = \core\test\phpunit\phpunit_util::call_internal_method($this->repo, "initiate_webdavclient", [], 'repository_nextcloud');
@@ -824,7 +825,8 @@ XML;
         $mockocsclient = $this->getMockBuilder(
             \repository_nextcloud\ocs_client::class)->disableOriginalConstructor()->disableOriginalClone()->getMock();
         $mockocsclient->expects($this->exactly(2))->method('call')->with('get_information_of_share',
-            array('share_id' => $shareid))->will($this->returnValue($expectedresponse));
+            ['share_id' => $shareid]
+        )->willReturn($expectedresponse);
         $this->set_private_property($mock, 'ocsclient');
         $this->repo->expects($this->once())->method('move_file_to_folder')->with('/merged (3).txt', 'Moodlefiles',
             $mock)->willReturn(array('success' => 201));
@@ -840,9 +842,11 @@ XML;
         $mockocsclient = $this->getMockBuilder(\repository_nextcloud\ocs_client::class
         )->disableOriginalConstructor()->disableOriginalClone()->getMock();
         $mockocsclient->expects($this->exactly(1))->method('call')->with('get_shares',
-            array('path' => '/merged (3).txt', 'reshares' => true))->will($this->returnValue($expectedresponse));
+            ['path' => '/merged (3).txt', 'reshares' => true]
+        )->willReturn($expectedresponse);
         $mockocsclient->expects($this->exactly(1))->method('call')->with('get_information_of_share',
-            array('share_id' => $shareid))->will($this->returnValue($expectedresponse));
+            ['share_id' => $shareid]
+        )->willReturn($expectedresponse);
         $this->set_private_property($mock, 'ocsclient');
         $this->repo->expects($this->once())->method('move_file_to_folder')->with('/merged (3).txt', 'Moodlefiles',
             $mock)->willReturn(array('success' => 201));
@@ -947,12 +951,12 @@ XML;
     /**
      * Testing sync_reference
      *
-     * @dataProvider sync_reference_provider
      * @param array $storedfileargs
      * @param array $mockfunctions
      * @param bool $expectedresult
      * @return void
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('sync_reference_provider')]
     public function test_sync_reference(array $storedfileargs, $mockfunctions, bool $expectedresult): void {
         $this->resetAfterTest(true);
 
@@ -1094,12 +1098,11 @@ XML;
     /**
      * Test search functionality with various inputs using the WebDAV search endpoint.
      *
-     * @dataProvider search_provider
      * @param string $searchtext The text to search for
      * @param array|bool $mockresponse The mock response from the webdav search method
      * @param array $expectedlist The expected result list
-     * @covers ::search
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('search_provider')]
     public function test_search(string $searchtext, array|bool $mockresponse, array $expectedlist): void {
         $expected = $this->get_initialised_return_array();
         $expected['list'] = $expectedlist;
@@ -1132,14 +1135,13 @@ XML;
     /**
      * Test search error handling scenarios.
      *
-     * @dataProvider search_error_provider
      * @param string $searchtext The search query to test
      * @param array|null $userinfo OAuth userinfo to mock (null for no client)
      * @param string $expecteddebugging Expected debugging message
      * @param bool $openreturn Whether WebDAV open should succeed
      * @param bool $expectsearch Whether search method should be called
-     * @covers ::search
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('search_error_provider')]
     public function test_search_errors(string $searchtext, array|null $userinfo, string $expecteddebugging,
             bool $openreturn = true, bool $expectsearch = true): void {
         $this->resetAfterTest(true);

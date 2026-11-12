@@ -22,11 +22,14 @@ use tool_uploadcourse_course;
 /**
  * Course test case.
  *
- * @covers     \tool_uploadcourse_course
  * @package    tool_uploadcourse
  * @copyright  2013 Frédéric Massart
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or late
  */
+#[\PHPUnit\Framework\Attributes\CoversClass(\tool_uploadcourse_course::class)]
+#[\PHPUnit\Framework\Attributes\CoversMethod(\permissions::class, 'check_permission_to_use_uploadcourse_tool')]
+#[\PHPUnit\Framework\Attributes\CoversMethod(\tool_uploadcourse_course::class, 'proceed')]
+#[\PHPUnit\Framework\Attributes\CoversMethod(\tool_uploadcourse_course::class, 'prepare')]
 final class course_test extends \advanced_testcase {
 
     /** @var \testing_data_generator $datagenerator */
@@ -236,8 +239,6 @@ final class course_test extends \advanced_testcase {
 
     /**
      * Test a role's capability to use the upload course tool.
-     *
-     * @covers \permissions::check_permission_to_use_uploadcourse_tool
      */
     public function test_invalid_role(): void {
         global $DB;
@@ -962,8 +963,6 @@ final class course_test extends \advanced_testcase {
     /**
      * Test that template course summary and overview files are copied to the new course
      * when no explicit values are provided in the CSV.
-     *
-     * @covers \tool_uploadcourse_course::proceed
      */
     public function test_upload_course_imports_template_summary_and_overviewfiles(): void {
         global $DB;
@@ -1014,8 +1013,6 @@ final class course_test extends \advanced_testcase {
     /**
      * Test that explicit course values provided in the CSV are not overwritten by
      * corresponding values from the template course.
-     *
-     * @covers \tool_uploadcourse_course::proceed
      */
     public function test_upload_course_keeps_explicit_values_over_template(): void {
         global $DB;
@@ -1396,9 +1393,8 @@ final class course_test extends \advanced_testcase {
      *
      * @param string $expectederror
      * @param array $uploaddata
-     *
-     * @dataProvider enrolment_uploaddata_error_provider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('enrolment_uploaddata_error_provider')]
     public function test_enrolment_error_create_course(string $expectederror, array $uploaddata): void {
         global $DB;
 
@@ -1440,9 +1436,8 @@ final class course_test extends \advanced_testcase {
      *
      * @param string $expectederror
      * @param array $uploaddata
-     *
-     * @dataProvider enrolment_uploaddata_error_provider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('enrolment_uploaddata_error_provider')]
     public function test_enrolment_error_update_course(string $expectederror, array $uploaddata): void {
         global $DB;
 
@@ -1761,8 +1756,6 @@ final class course_test extends \advanced_testcase {
 
     /**
      * Test when role doesn't exist.
-     *
-     * @covers \tool_uploadcourse_course::prepare
      */
     public function test_role_not_exist(): void {
         $this->resetAfterTest();
@@ -1785,8 +1778,6 @@ final class course_test extends \advanced_testcase {
 
     /**
      * Test when role not allowed in course context.
-     *
-     * @covers \tool_uploadcourse_course::proceed
      */
     public function test_role_not_allowed(): void {
         $this->resetAfterTest();
@@ -1812,8 +1803,6 @@ final class course_test extends \advanced_testcase {
 
     /**
      * Test when role is allowed.
-     *
-     * @covers \tool_uploadcourse_course::proceed
      */
     public function test_role_allowed(): void {
         global $DB;

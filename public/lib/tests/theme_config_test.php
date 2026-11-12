@@ -33,10 +33,42 @@ require_once($CFG->libdir . '/outputlib.php');
  *
  * @copyright 2012 Sam Hemelryk
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @covers \theme_config
- * @coversDefaultClass \theme_config
  */
+#[\PHPUnit\Framework\Attributes\CoversClass(\theme_config::class)]
+#[\PHPUnit\Framework\Attributes\CoversClass(\theme_config::class)]
 final class theme_config_test extends advanced_testcase {
+    /**
+     * Confirm that cyclic references created during SCSS compilation are released.
+     */
+    public function test_get_css_content_from_scss_releases_cycles(): void {
+        $theme = theme_config::load('boost');
+        $theme->prescsscallback = null;
+        $theme->extrascsscallback = null;
+
+        $scss = '';
+        for ($i = 0; $i < 10; $i++) {
+            $scss .= ".test-{$i} { color: red; &:hover { color: blue; } }\n";
+        }
+        $theme->scss = static fn() => $scss;
+
+        $method = new ReflectionMethod(theme_config::class, 'get_css_content_from_scss');
+
+        gc_collect_cycles();
+        $gcenabled = gc_enabled();
+        gc_disable();
+        try {
+            $css = $method->invoke($theme, false);
+            $remainingcycles = gc_collect_cycles();
+        } finally {
+            if ($gcenabled) {
+                gc_enable();
+            }
+        }
+
+        $this->assertSame(0, $remainingcycles);
+        $this->assertStringContainsString('.test-0:hover', $css);
+    }
+
     /**
      * This function will test directives used to serve SVG images to make sure
      * this are making the right decisions.
@@ -164,9 +196,32 @@ final class theme_config_test extends advanced_testcase {
     }
 
     /**
+     * Test that the editor content CSS is cached separately from the main CSS, per direction.
+     */
+    public function test_editor_css_content_cache(): void {
+        $this->resetAfterTest();
+
+        $theme = theme_config::load('boost');
+        $theme->force_svg_use(true);
+
+        $theme->set_rtl_mode(false);
+        $this->assertFalse($theme->get_editor_css_cached_content());
+        $this->assertEquals('editor_boost_ltr', $theme->get_editor_css_cache_key());
+
+        $this->assertTrue($theme->set_editor_css_content_cache('.ltr {}'));
+        $this->assertSame('.ltr {}', $theme->get_editor_css_cached_content());
+
+        // The main CSS cache is not affected.
+        $this->assertFalse($theme->has_css_cached_content());
+
+        // Other directions have their own entry.
+        $theme->set_rtl_mode(true);
+        $this->assertEquals('editor_boost_rtl', $theme->get_editor_css_cache_key());
+        $this->assertFalse($theme->get_editor_css_cached_content());
+    }
+
+    /**
      * Test that {@see theme_config::get_all_block_regions()} returns localised list of region names.
-     *
-     * @covers ::get_all_block_regions
      */
     public function test_get_all_block_regions(): void {
         $this->resetAfterTest();
@@ -179,10 +234,8 @@ final class theme_config_test extends advanced_testcase {
 
     /**
      * Test that layouts are inherited from the parent theme and from the grandparent theme.
-     *
-     * @covers ::load
-     * @runInSeparateProcess
      */
+    #[\PHPUnit\Framework\Attributes\RunInSeparateProcess]
     public function test_layout_inheritance(): void {
         global $CFG;
 

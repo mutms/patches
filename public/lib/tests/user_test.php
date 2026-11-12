@@ -19,11 +19,17 @@ namespace core;
 /**
  * Test core_user class.
  *
- * @covers \core_user
  * @package    core
  * @copyright  2013 Rajesh Taneja <rajesh@moodle.com>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
+#[\PHPUnit\Framework\Attributes\CoversClass(\core_user::class)]
+#[\PHPUnit\Framework\Attributes\CoversMethod(\core_user::class, 'get_fullname')]
+#[\PHPUnit\Framework\Attributes\CoversMethod(\core_user::class, 'get_dummy_fullname')]
+#[\PHPUnit\Framework\Attributes\CoversMethod(\core_user::class, 'get_profile_url')]
+#[\PHPUnit\Framework\Attributes\CoversMethod(\core_user::class, 'get_profile_picture')]
+#[\PHPUnit\Framework\Attributes\CoversMethod(\core_user::class, 'get_initials')]
+#[\PHPUnit\Framework\Attributes\CoversMethod(\core_user::class, 'update_user')]
 final class user_test extends \advanced_testcase {
 
     /**
@@ -847,8 +853,6 @@ final class user_test extends \advanced_testcase {
 
     /**
      * Test for function to get user details.
-     *
-     * @covers \core_user::get_fullname
      */
     public function test_display_name(): void {
         $this->resetAfterTest();
@@ -877,8 +881,6 @@ final class user_test extends \advanced_testcase {
 
     /**
      * Test retrieving dummy user fullname
-     *
-     * @covers \core_user::get_dummy_fullname
      */
     public function test_get_dummy_fullname(): void {
         $context = \context_system::instance();
@@ -903,8 +905,6 @@ final class user_test extends \advanced_testcase {
 
     /**
      * Test for function to get user details.
-     *
-     * @covers \core_user::get_profile_url
      */
     public function test_display_profile_url(): void {
         $this->resetAfterTest();
@@ -930,8 +930,6 @@ final class user_test extends \advanced_testcase {
 
     /**
      * Test for function to get user details.
-     *
-     * @covers \core_user::get_profile_picture
      */
     public function test_display_profile_picture(): void {
         global $OUTPUT, $CFG;
@@ -973,9 +971,8 @@ final class user_test extends \advanced_testcase {
      * @param string $fullnameconfig
      * @param string $expected
      * @return void
-     * @covers       \core_user::get_initials
-     * @dataProvider user_name_provider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('user_name_provider')]
     public function test_get_initials(array $userdata, string $fullnameconfig, string $expected): void {
         $this->resetAfterTest();
         // Create a user.
@@ -1067,5 +1064,39 @@ final class user_test extends \advanced_testcase {
         $this->assertSame('', $systemuser->lang);
         $this->assertSame('', $systemuser->theme);
         $this->assertObjectNotHasProperty('description', $systemuser);
+    }
+
+    /**
+     * Test that any outstanding forgot-password tokens are invalidated when a user's email address changes.
+     */
+    public function test_update_user_invalidates_password_reset_tokens_on_email_change(): void {
+        global $DB;
+
+        $user = $this->getDataGenerator()->create_user(['email' => 'original@example.com']);
+
+        // Simulate an outstanding forgot-password token for the user.
+        $resetrecord = (object) [
+            'userid' => $user->id,
+            'timerequested' => time(),
+            'token' => random_string(32),
+        ];
+        $DB->insert_record('user_password_resets', $resetrecord);
+        $this->assertTrue($DB->record_exists('user_password_resets', ['userid' => $user->id]));
+
+        // Updating an unrelated field should not touch the outstanding token.
+        $updateduser = (object) [
+            'id' => $user->id,
+            'firstname' => 'Changed',
+        ];
+        \core_user::update_user($updateduser);
+        $this->assertTrue($DB->record_exists('user_password_resets', ['userid' => $user->id]));
+
+        // Changing the email address should invalidate the outstanding token.
+        $updateduser = (object) [
+            'id' => $user->id,
+            'email' => 'changed@example.com',
+        ];
+        \core_user::update_user($updateduser);
+        $this->assertFalse($DB->record_exists('user_password_resets', ['userid' => $user->id]));
     }
 }

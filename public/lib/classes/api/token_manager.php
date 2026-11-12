@@ -20,7 +20,6 @@ use core\api\repository\api_token_repository;
 use core\clock;
 use core\di;
 use core\exception\moodle_exception;
-use core\oauth2\server\repository\scope_repository;
 
 /**
  * Mints personal access tokens, holding the policy the repository layer leaves open.
@@ -58,6 +57,14 @@ class token_manager {
     /** @var int How close to expiry a token is flagged as expiring soon, in days. */
     public const int EXPIRY_IMMINENT_DAYS = 3;
 
+    /** @var int[] How long before a token expires its owner is reminded, in days. */
+    public const array REMINDER_DAYS = [30, 7, 1];
+
+    // A notice months after the fact, sent once an unreachable owner becomes reachable again,
+    // would only confuse them.
+    /** @var int For how long after a token expires its owner may still be told so, in days. */
+    public const int EXPIRED_NOTICE_DAYS = 7;
+
     /**
      * The number of bytes used to generate the secret.
      *
@@ -72,15 +79,15 @@ class token_manager {
      *
      * @param api_token_repository $repository The repository which persists tokens.
      * @param clock $clock The clock used to judge expiry dates.
-     * @param scope_repository $scoperepository The repository used to resolve available scopes.
+     * @param \core\router\scope\util $scopeutil Scope utility used to resolve available scopes.
      */
     public function __construct(
         /** @var api_token_repository The repository which persists tokens. */
         protected readonly api_token_repository $repository,
         /** @var clock The clock used to judge expiry dates. */
         protected readonly clock $clock,
-        /** @var scope_repository The repository used to resolve available scopes. */
-        protected readonly scope_repository $scoperepository,
+        /** @var \core\router\scope\util The repository used to resolve available scopes. */
+        protected readonly \core\router\scope\util $scopeutil,
     ) {
     }
 
@@ -145,7 +152,7 @@ class token_manager {
      * @return \League\OAuth2\Server\Entities\ScopeEntityInterface[]
      */
     public function get_available_scopes(): array {
-        return $this->scoperepository->get_all_scopes();
+        return $this->scopeutil->get_all_scopes();
     }
 
     /**
@@ -163,6 +170,34 @@ class token_manager {
 
         // A token which has already lapsed is not "expiring soon": its status says so already.
         return $expirytime > $now && $expirytime <= $now + (self::EXPIRY_IMMINENT_DAYS * DAYSECS);
+    }
+
+    /**
+     * Whether a token's owner is due a reminder that it is about to expire.
+     *
+     * @param int $timecreated When the token was created.
+     * @param int $expirytime When the token expires.
+     * @param int|null $lastreminded When the owner was last reminded, or null if never.
+     * @return bool
+     */
+    public static function is_reminder_due(int $timecreated, int $expirytime, ?int $lastreminded): bool {
+        $now = self::now();
+        $halflife = $timecreated + intdiv($expirytime - $timecreated, 2);
+        $due = null;
+
+        foreach (self::REMINDER_DAYS as $days) {
+            $remindat = $expirytime - ($days * DAYSECS);
+
+            // A reminder in the first half of a token's life would arrive as good as when it was
+            // created, so a short-lived token only gets the reminders close to its expiry.
+            if ($remindat >= $halflife && $remindat <= $now) {
+                $due = max($due ?? $remindat, $remindat);
+            }
+        }
+
+        // Only the latest reminder passed counts, so reminders missed while cron was down are not
+        // all sent at once.
+        return $due !== null && ($lastreminded === null || $lastreminded < $due);
     }
 
     /**

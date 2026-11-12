@@ -78,11 +78,11 @@ final class client_test extends advanced_testcase {
     /**
      * Test the map_userinfo_to_fields function
      *
-     * @dataProvider map_response_provider
      * @param array $mapping
      * @param array $expected
      * @throws ReflectionException
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('map_response_provider')]
     public function test_map_userinfo_to_fields(array $mapping, array $expected): void {
         $dataset = [
             "name" => (object) [
@@ -118,7 +118,7 @@ final class client_test extends advanced_testcase {
         $mock = $mockbuilder->getMock();
         $mock->expects($this->once())
             ->method('get_userinfo_mapping')
-            ->will($this->returnValue($mapping));
+            ->willReturn($mapping);
         $this->assertSame($expected, $method->invoke($mock, (object) $dataset));
     }
 }

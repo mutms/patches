@@ -30,6 +30,11 @@ require_once(__DIR__ . '/../../ai/tests/ai_test_trait.php');
  * @copyright  2016 Juan Leyva
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
+#[\PHPUnit\Framework\Attributes\CoversFunction('set_moduleinfo_defaults')]
+#[\PHPUnit\Framework\Attributes\CoversFunction('update_moduleinfo')]
+#[\PHPUnit\Framework\Attributes\CoversFunction('prepare_new_moduleinfo_data')]
+#[\PHPUnit\Framework\Attributes\CoversClass(\add_moduleinfo::class)]
+#[\PHPUnit\Framework\Attributes\CoversClass(\can_add_moduleinfo::class)]
 final class modlib_test extends \advanced_testcase {
     use ai_test_trait;
 
@@ -53,9 +58,8 @@ final class modlib_test extends \advanced_testcase {
      *
      * @param string $placement The placement plugin component.
      * @param string $actionname The AI action to configure and expect for the placement.
-     * @dataProvider provider_uninstalled_ai_placements
-     * @covers ::set_moduleinfo_defaults
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('provider_uninstalled_ai_placements')]
     public function test_set_moduleinfo_defaults_with_uninstalled_ai_placement(
         string $placement,
         string $actionname,
@@ -104,9 +108,8 @@ final class modlib_test extends \advanced_testcase {
 
     /**
      * Test course code has no direct dependency on AI placement plugins.
-     *
-     * @coversNothing
      */
+    #[\PHPUnit\Framework\Attributes\CoversNothing]
     public function test_course_code_has_no_ai_placement_dependencies(): void {
         global $CFG;
 
@@ -171,7 +174,6 @@ final class modlib_test extends \advanced_testcase {
 
     /**
      * Test prepare_new_moduleinfo_data with suffix (which is currently only used by the completion rules).
-     * @covers ::prepare_new_moduleinfo_data
      */
     public function test_prepare_new_moduleinfo_data_with_suffix(): void {
         global $DB;
@@ -295,9 +297,76 @@ final class modlib_test extends \advanced_testcase {
     }
 
     /**
+     * update_moduleinfo() takes the coursemodule from the passed $cm, not from the form data.
+     */
+    public function test_update_moduleinfo_pins_coursemodule_from_cm(): void {
+        global $DB;
+        $this->resetAfterTest(true);
+        $this->setAdminUser();
+
+        $coursea = self::getDataGenerator()->create_course();
+        $courseb = self::getDataGenerator()->create_course();
+        $label = self::getDataGenerator()->create_module(
+            'label',
+            ['course' => $coursea->id, 'intro' => 'Original content', 'introformat' => FORMAT_HTML],
+        );
+        $otherlabel = self::getDataGenerator()->create_module(
+            'label',
+            ['course' => $courseb->id, 'intro' => 'Other content', 'introformat' => FORMAT_HTML],
+        );
+        $labelcm = get_coursemodule_from_id('', $label->cmid, 0, false, MUST_EXIST);
+        $othercm = get_coursemodule_from_id('', $otherlabel->cmid, 0, false, MUST_EXIST);
+
+        [$cm, $context, $module, $data, $cw] = get_moduleinfo_data($labelcm, $coursea);
+        $data->introeditor['text'] = 'Updated content';
+        $data->coursemodule = $othercm->id;
+
+        [$resultcm, $moduleinfo] = update_moduleinfo($labelcm, $data, $coursea);
+
+        $this->assertEquals($labelcm->id, $moduleinfo->coursemodule);
+        $this->assertEquals($labelcm->instance, $moduleinfo->instance);
+        $this->assertEquals('label', $moduleinfo->modulename);
+        $this->assertStringContainsString(
+            'Updated content',
+            $DB->get_field('label', 'intro', ['id' => $labelcm->instance], MUST_EXIST),
+        );
+        $this->assertEquals(
+            'Other content',
+            $DB->get_field('label', 'intro', ['id' => $othercm->instance], MUST_EXIST),
+        );
+    }
+
+    /**
+     * update_moduleinfo() takes the modulename from the passed $cm, not from the form data.
+     */
+    public function test_update_moduleinfo_pins_modulename_from_cm(): void {
+        global $DB;
+        $this->resetAfterTest(true);
+        $this->setAdminUser();
+
+        $course = self::getDataGenerator()->create_course();
+        $label = self::getDataGenerator()->create_module(
+            'label',
+            ['course' => $course->id, 'intro' => 'Original content', 'introformat' => FORMAT_HTML],
+        );
+        $labelcm = get_coursemodule_from_id('', $label->cmid, 0, false, MUST_EXIST);
+
+        [$cm, $context, $module, $data, $cw] = get_moduleinfo_data($labelcm, $course);
+        $data->introeditor['text'] = 'Updated content';
+        $data->modulename = 'url';
+
+        [$resultcm, $moduleinfo] = update_moduleinfo($labelcm, $data, $course);
+
+        $this->assertEquals('label', $moduleinfo->modulename);
+        $this->assertStringContainsString(
+            'Updated content',
+            $DB->get_field('label', 'intro', ['id' => $labelcm->instance], MUST_EXIST),
+        );
+        $this->assertEquals(0, $DB->count_records('url'));
+    }
+
+    /**
      * Test add_moduleinfo (only beforemod parameter for now).
-     *
-     * @covers \add_moduleinfo
      */
     public function test_add_moduleinfo(): void {
         global $DB;
@@ -367,8 +436,6 @@ final class modlib_test extends \advanced_testcase {
 
     /**
      * Test for can_add_moduleinfo on a non-existing module.
-     *
-     * @covers \can_add_moduleinfo
      */
     public function test_can_add_moduleinfo_invalid_module(): void {
         global $DB;
@@ -391,8 +458,6 @@ final class modlib_test extends \advanced_testcase {
 
     /**
      * Test for can_add_moduleinfo when the user does not have addinstance capability.
-     *
-     * @covers \can_add_moduleinfo
      */
     public function test_can_add_moduleinfo_deny_add_instance(): void {
         global $DB;
@@ -428,11 +493,10 @@ final class modlib_test extends \advanced_testcase {
     /**
      * Test for can_add_moduleinfo.
      *
-     * @dataProvider provider_can_add_moduleinfo
-     * @covers \can_add_moduleinfo
      * @param string $rolename
      * @param bool $hascapability
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('provider_can_add_moduleinfo')]
     public function test_can_add_moduleinfo_capability(string $rolename, bool $hascapability): void {
         global $DB;
         $this->resetAfterTest(true);
@@ -468,11 +532,10 @@ final class modlib_test extends \advanced_testcase {
     /**
      * Test for can_add_moduleinfo returns true on a delegate section.
      *
-     * @dataProvider provider_can_add_moduleinfo
-     * @covers \can_add_moduleinfo
      * @param string $rolename
      * @param bool $hascapability
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('provider_can_add_moduleinfo')]
     public function test_can_add_moduleinfo_delegate_section(string $rolename, bool $hascapability): void {
         global $DB;
         $this->resetAfterTest(true);

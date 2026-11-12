@@ -16,7 +16,6 @@
 
 namespace core_admin\form\oauth2\server;
 
-use core\oauth2\server\repository\scope_repository;
 use core\output\html_writer;
 use moodleform;
 
@@ -52,6 +51,19 @@ abstract class base_client_form extends moodleform {
     protected const string SCOPES_FIELDSET_ID = 'id_scopesfieldset';
 
     /**
+     * Classes applied to the scopes fieldset when it carries a validation error.
+     *
+     * Bootstrap's own error styling (the Name field's red box) is a `.is-invalid` class, but that
+     * class only paints a border on `.form-control`/`.form-select` elements, not on a plain
+     * fieldset. These border utility classes are already compiled into Boost's CSS, so they give
+     * the fieldset the same kind of persistent, deliberate error box without a new stylesheet
+     * rule, and independent of any browser's own (and differently coloured) focus ring.
+     *
+     * @var string
+     */
+    protected const string SCOPES_FIELDSET_ERROR_CLASS = 'border border-danger rounded p-2 mb-2';
+
+    /**
      * The "Scopes" label text, including its required-field marker.
      *
      * Shared by the static label row and the fieldset's legend, so both read the same thing.
@@ -72,12 +84,12 @@ abstract class base_client_form extends moodleform {
     /**
      * Create an instance of a client form.
      *
-     * @param scope_repository $scoperepository
+     * @param \core\router\scope\util $scopeutil
      * @param array $customdata
      */
     public function __construct(
-        /** @var scope_repository */
-        protected scope_repository $scoperepository,
+        /** @var \core\router\scope\util */
+        protected \core\router\scope\util $scopeutil,
         array $customdata = [],
     ) {
         parent::__construct(
@@ -282,7 +294,7 @@ abstract class base_client_form extends moodleform {
 
         // Colons are not usable in element names, so each becomes an underscore. Deriving the
         // name from the identifier rather than the position keeps it stable as scopes change.
-        foreach (array_keys($this->scoperepository->get_all_scopes()) as $identifier) {
+        foreach (array_keys($this->scopeutil->get_all_scopes()) as $identifier) {
             $elements[self::SCOPE_ELEMENT_PREFIX . str_replace(':', '_', $identifier)] = $identifier;
         }
 
@@ -295,13 +307,25 @@ abstract class base_client_form extends moodleform {
     protected function add_scope_fields(): void {
         global $OUTPUT;
 
-        $scopes = $this->scoperepository->get_all_scopes();
+        $scopes = $this->scopeutil->get_all_scopes();
 
         $mform = $this->_form;
 
         $this->scopeslabel = get_string('oauth2server_scopes', 'admin')
             . ' '
             . $OUTPUT->pix_icon('req', get_string('requiredelement', 'form'));
+
+        // A plain notification() call renders as an assertive alert that a core script re-fires
+        // on every page load regardless of whether the scopes error is present, which would
+        // compete with, and duplicate, the fieldset's own focus announcement on a failed
+        // submit. set_announce(false) keeps the info box exactly as it looks, without that
+        // competing announcement.
+        $infonotification = new \core\output\notification(
+            get_string('oauth2server_client_scope_list', 'admin'),
+            \core\output\notification::NOTIFY_INFO,
+            false,
+        );
+        $infonotification->set_announce(false);
 
         // The hint carries the label, so "Scopes" sits in the label column like every other
         // field on this form and level with something to read. Not on the first checkbox: an
@@ -315,7 +339,7 @@ abstract class base_client_form extends moodleform {
             $this->scopeslabel,
             // What the scopes are for, rather than that one is required: the marker beside the
             // label says that already, and so does the error when none is ticked.
-            $OUTPUT->notification(get_string('oauth2server_client_scope_list', 'admin'), 'info', false),
+            $OUTPUT->render($infonotification),
         );
 
         // A real fieldset around the checkboxes, so their shared "select at least one" error
@@ -351,27 +375,40 @@ abstract class base_client_form extends moodleform {
      * Build the scopes fieldset's opening tag and its legend.
      *
      * @param bool $invalid Whether the scopes error is present, so the fieldset should be
-     *                       exposed as invalid and take focus once the page renders.
+     *                      exposed as invalid once the page renders.
+     * @param bool $hasautofocus Whether autofocus should be set on the scopes fieldset.
      * @return string
      */
-    protected function get_scopes_fieldset_open(bool $invalid): string {
+    protected function get_scopes_fieldset_open(bool $invalid, bool $hasautofocus = false): string {
         $attributes = ['id' => self::SCOPES_FIELDSET_ID];
+        $legend = $this->scopeslabel;
 
         if ($invalid) {
             // Mirrors what mform already does for a single invalid control such as Name:
-            // aria-invalid and aria-describedby point at the error, and, since there is no
-            // JavaScript involved in a full page reload, tabindex plus autofocus is what
-            // actually moves focus here once the browser has finished parsing the page.
+            // aria-invalid and the error-state class gives it the same kind of persistent
+            // visual box the Name field gets from is-invalid. tabindex makes the fieldset
+            // focusable at all; autofocus is left in as a harmless progressive-enhancement
+            // fallback, but {@see display()} is what actually moves focus here, since
+            // autofocus's content attribute is only specified to reliably do that on
+            // focusable form-associated elements (button, input, select, textarea), not a
+            // plain fieldset.
             $attributes += [
                 'tabindex' => '-1',
-                'autofocus' => 'autofocus',
                 'aria-invalid' => 'true',
-                'aria-describedby' => 'id_error_' . self::SCOPE_LABEL,
+                'class' => self::SCOPES_FIELDSET_ERROR_CLASS,
             ];
+
+            if ($hasautofocus) {
+                $attributes['autofocus'] = 'autofocus';
+            }
+
+            // The error joins the legend, which is the fieldset's accessible name.
+            // This ensures that the validation error will be reliably announced on focus by every screen reader.
+            $legend .= ' ' . get_string('oauth2serverclientnoscopes', 'error');
         }
 
         return html_writer::start_tag('fieldset', $attributes) .
-            html_writer::tag('legend', $this->scopeslabel, ['class' => 'visually-hidden']);
+            html_writer::tag('legend', $legend, ['class' => 'visually-hidden']);
     }
 
     /**
@@ -383,7 +420,36 @@ abstract class base_client_form extends moodleform {
     #[\Override]
     public function display(): void {
         if ($this->_form->getElementError(self::SCOPE_LABEL)) {
-            $this->scopesfieldsetopen->setText($this->get_scopes_fieldset_open(true));
+            global $PAGE;
+
+            // Find the first element with an error by iterating in order they were added.
+            $firsterrorelement = null;
+            foreach ($this->_form->_elements as $element) {
+                $elementname = $element->getName();
+                // Skip elements without names.
+                if ($elementname === null || $elementname === '') {
+                    continue;
+                }
+                // Check if this element has an error.
+                if (isset($this->_form->_errors[$elementname])) {
+                    $firsterrorelement = $elementname;
+                    break;
+                }
+            }
+
+            // Only add autofocus/focus if scopes is the first error element.
+            $isscopesfirsterror = ($firsterrorelement === self::SCOPE_LABEL);
+            $this->scopesfieldsetopen->setText($this->get_scopes_fieldset_open(true, $isscopesfirsterror));
+
+            if ($isscopesfirsterror) {
+                // Force focus onto the fieldset explicitly rather than relying on the autofocus
+                // attribute alone: this runs once the whole page (including the fieldset itself) has
+                // loaded, so it works regardless of whether a given browser honours autofocus on a
+                // plain fieldset.
+                $PAGE->requires->js_init_code(
+                    'document.getElementById(' . json_encode(self::SCOPES_FIELDSET_ID) . ').focus();',
+                );
+            }
         }
 
         parent::display();

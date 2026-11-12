@@ -36,6 +36,13 @@ defined('MOODLE_INTERNAL') || die();
  * @copyright  2012 Petr Skoda {@link http://skodak.org}
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
+#[\PHPUnit\Framework\Attributes\CoversClass(\enrol_get_course_users::class)]
+#[\PHPUnit\Framework\Attributes\CoversFunction('enrol_check_plugins')]
+#[\PHPUnit\Framework\Attributes\CoversFunction('enrol_course_delete')]
+#[\PHPUnit\Framework\Attributes\CoversFunction('enrol_selfenrol_available')]
+#[\PHPUnit\Framework\Attributes\CoversMethod(\enrol_plugin::class, 'validate_enrol_plugin_data')]
+#[\PHPUnit\Framework\Attributes\CoversMethod(\enrol_plugin::class, 'update_enrol_plugin_data')]
+#[\PHPUnit\Framework\Attributes\CoversMethod(\enrol_plugin::class, 'send_course_welcome_message_to_user')]
 final class enrollib_test extends advanced_testcase {
 
     public function test_enrol_get_all_users_courses(): void {
@@ -301,10 +308,10 @@ final class enrollib_test extends advanced_testcase {
      * When a value for user id is present, the method should make sure the user has the proper capability to
      * un-enrol users before removing the enrolment data. If the capabilities are missing the data should not be removed.
      *
-     * @dataProvider enrol_course_delete_with_userid_provider
      * @param array $excludedcapabilities The capabilities that should be excluded from the user's role
      * @param bool $expected The expected results
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('enrol_course_delete_with_userid_provider')]
     public function test_enrol_course_delete_with_userid($excludedcapabilities, $expected): void {
         global $DB;
 
@@ -382,6 +389,92 @@ final class enrollib_test extends advanced_testcase {
         // Check existence of the self enrolment instance in the course.
         $selfinstance = (bool) $DB->count_records('enrol', ['enrol' => 'self', 'courseid' => $course->id]);
         $this->assertEquals($expected['Self course enrolment instance exists'], $selfinstance);
+    }
+
+    /**
+     * Test enrol_course_delete() when there is an enrolment from a disabled plugin.
+     *
+     * enrol_get_plugins() omits disabled plugins, so there is nothing to
+     * ask about un-enrolment and the enrolment must be remain unmodified.
+     */
+    public function test_enrol_course_delete_with_disabled_plugin(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+
+        // Make sure the self plugin is enabled so we can create an instance.
+        $this->assertArrayHasKey('self', enrol_get_plugins(true));
+
+        // Create users.
+        $user1 = $this->getDataGenerator()->create_user();
+        $user2 = $this->getDataGenerator()->create_user();
+        $teacher = $this->getDataGenerator()->create_user();
+        // Create a course.
+        $course = $this->getDataGenerator()->create_course();
+        $coursecontext = context_course::instance($course->id);
+
+        $studentrole = $DB->get_record('role', ['shortname' => 'student']);
+        $editingteacherrole = $DB->get_record('role', ['shortname' => 'editingteacher']);
+
+        $manual = enrol_get_plugin('manual');
+        $manualinstance = $DB->get_record(
+            'enrol',
+            ['courseid' => $course->id, 'enrol' => 'manual'],
+            '*',
+            MUST_EXIST
+        );
+        // Enrol user1 as a student, and the teacher who may un-enrol anyone.
+        $manual->enrol_user($manualinstance, $user1->id, $studentrole->id);
+        $manual->enrol_user($manualinstance, $teacher->id, $editingteacherrole->id);
+
+        $self = enrol_get_plugin('self');
+        $selfinstance = $DB->get_record(
+            'enrol',
+            ['courseid' => $course->id, 'enrol' => 'self'],
+            '*',
+            MUST_EXIST
+        );
+        $self->update_status($selfinstance, ENROL_INSTANCE_ENABLED);
+        // Enrol user2 as a student via self.
+        $self->enrol_user($selfinstance, $user2->id, $studentrole->id);
+
+        // Disable self, leaving its instance orphaned in the course.
+        enrol::enable_plugin('self', false);
+        $this->assertArrayNotHasKey('self', enrol_get_plugins(true));
+        $this->assertTrue($DB->record_exists('enrol', ['id' => $selfinstance->id]));
+
+        // Delete the enrolments the teacher may remove.
+        enrol_course_delete($course, $teacher->id);
+
+        // Manual is enabled and allows un-enrolment, so its data is removed.
+        $this->assertFalse($DB->record_exists('enrol', ['id' => $manualinstance->id]));
+        $this->assertFalse($DB->record_exists(
+            'user_enrolments',
+            ['enrolid' => $manualinstance->id, 'userid' => $user1->id]
+        ));
+        $this->assertFalse($DB->record_exists(
+            'role_assignments',
+            ['roleid' => $studentrole->id, 'userid' => $user1->id, 'contextid' => $coursecontext->id]
+        ));
+        $this->assertFalse($DB->record_exists(
+            'user_enrolments',
+            ['enrolid' => $manualinstance->id, 'userid' => $teacher->id]
+        ));
+        $this->assertFalse($DB->record_exists(
+            'role_assignments',
+            ['roleid' => $editingteacherrole->id, 'userid' => $teacher->id, 'contextid' => $coursecontext->id]
+        ));
+
+        // The self plugin is disabled, so its data remains unmodified.
+        $this->assertTrue($DB->record_exists('enrol', ['id' => $selfinstance->id]));
+        $this->assertTrue($DB->record_exists(
+            'user_enrolments',
+            ['enrolid' => $selfinstance->id, 'userid' => $user2->id]
+        ));
+        $this->assertTrue($DB->record_exists(
+            'role_assignments',
+            ['roleid' => $studentrole->id, 'userid' => $user2->id, 'contextid' => $coursecontext->id]
+        ));
     }
 
     /**
@@ -1061,9 +1154,8 @@ final class enrollib_test extends advanced_testcase {
      * @param int|null $timestartoffset Null for 0, otherwise offset from current time
      * @param int|null $timeendoffset Null for 0, otherwise offset from current time
      * @param bool $expectreturn
-     *
-     * @dataProvider enrol_get_my_courses_by_time_provider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('enrol_get_my_courses_by_time_provider')]
     public function test_enrol_get_my_courses_by_time(?int $timestartoffset, ?int $timeendoffset, bool $expectreturn): void {
         $this->resetAfterTest();
 
@@ -1120,7 +1212,6 @@ final class enrollib_test extends advanced_testcase {
     /**
      * test_course_users in groups
      *
-     * @covers \enrol_get_course_users()
      * @return void
      */
     public function test_course_users_in_groups(): void {
@@ -1301,7 +1392,6 @@ final class enrollib_test extends advanced_testcase {
     /**
      * Test the get_enrolled_courses_by_timeline_classification function.
      *
-     * @dataProvider get_enrol_get_my_courses_sort_by_last_access_test_cases
      * @param array $enrolledcoursesdata Courses to create and enrol the user in
      * @param array $unenrolledcoursesdata Courses to create nut not enrol the user in
      * @param string $sort Sort string for the enrol function
@@ -1309,6 +1399,7 @@ final class enrollib_test extends advanced_testcase {
      * @param int $offset Offset the courses result set by this amount
      * @param array $expectedcourses Expected courses in result
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('get_enrol_get_my_courses_sort_by_last_access_test_cases')]
     public function test_enrol_get_my_courses_sort_by_last_access(
         $enrolledcoursesdata,
         $unenrolledcoursesdata,
@@ -1451,12 +1542,12 @@ final class enrollib_test extends advanced_testcase {
     /**
      * Test get_enrolled_with_capabilities_join cannotmatchanyrows attribute.
      *
-     * @dataProvider get_enrolled_with_capabilities_join_cannotmatchanyrows_data
      * @param string $capability the tested capability
      * @param bool $useprohibit if the capability must be assigned to prohibit
      * @param int $expectedmatch expected cannotmatchanyrows value
      * @param int $expectedcount expceted count value
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('get_enrolled_with_capabilities_join_cannotmatchanyrows_data')]
     public function test_get_enrolled_with_capabilities_join_cannotmatchanyrows(
         string $capability,
         bool $useprohibit,
@@ -1523,7 +1614,6 @@ final class enrollib_test extends advanced_testcase {
 
     /**
      * Test last_time_enrolments_synced not recorded with "force" option for enrol_check_plugins.
-     * @covers ::enrol_check_plugins
      */
     public function test_enrol_check_plugins_with_forced_option(): void {
         $this->resetAfterTest();
@@ -1551,11 +1641,10 @@ final class enrollib_test extends advanced_testcase {
     /**
      * Test that empty 'enrolments_sync_interval' is treated as forced option for enrol_check_plugins.
      *
-     * @dataProvider empty_config_data_provider
-     * @covers ::enrol_check_plugins
      *
      * @param mixed $config Config value.
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('empty_config_data_provider')]
     public function test_enrol_check_plugins_with_empty_config_value($config): void {
         global $CFG;
 
@@ -1570,7 +1659,6 @@ final class enrollib_test extends advanced_testcase {
 
     /**
      * Test last_time_enrolments_synced is recorded without "force" option for enrol_check_plugins.
-     * @covers ::enrol_check_plugins
      */
     public function test_last_time_enrolments_synced_is_set_if_not_forced(): void {
         $this->resetAfterTest();
@@ -1591,7 +1679,6 @@ final class enrollib_test extends advanced_testcase {
 
     /**
      * Test last_time_enrolments_synced is recorded correctly without "force" option for enrol_check_plugins.
-     * @covers ::enrol_check_plugins
      */
     public function test_last_time_enrolments_synced_is_set_if_not_forced_if_have_not_passed_interval(): void {
         global $CFG;
@@ -1615,8 +1702,6 @@ final class enrollib_test extends advanced_testcase {
 
     /**
      * Test enrol_selfenrol_available function behavior.
-     *
-     * @covers ::enrol_selfenrol_available
      */
     public function test_enrol_selfenrol_available(): void {
         global $DB, $CFG;
@@ -1746,8 +1831,6 @@ final class enrollib_test extends advanced_testcase {
 
     /**
      * Test the behaviour of validate_enrol_plugin_data().
-     *
-     * @covers \enrol_plugin::validate_enrol_plugin_data
      */
     public function test_validate_enrol_plugin_data(): void {
         $this->resetAfterTest();
@@ -1768,8 +1851,6 @@ final class enrollib_test extends advanced_testcase {
 
     /**
      * Test the behaviour of update_enrol_plugin_data().
-     *
-     * @covers \enrol_plugin::update_enrol_plugin_data
      */
     public function test_update_enrol_plugin_data(): void {
         global $DB;
@@ -1838,8 +1919,6 @@ final class enrollib_test extends advanced_testcase {
 
     /**
      * Test case for checking the email greetings in various user notification emails.
-     *
-     * @covers \enrol_plugin::send_course_welcome_message_to_user
      */
     public function test_email_greetings(): void {
         global $DB;
